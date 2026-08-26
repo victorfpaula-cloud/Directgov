@@ -10,7 +10,22 @@ const GRAPH_API_VERSION = "v21.0";
  */
 export function assinaturaValida(corpoBruto: string, assinaturaRecebida: string | null): boolean {
   const appSecret = process.env.META_APP_SECRET;
-  if (!appSecret || !assinaturaRecebida) return false;
+
+  // Log temporário de diagnóstico (26/08/2026) — nenhuma das linhas abaixo expõe o App Secret:
+  // a assinatura em si é só um hash (não dá pra voltar pro segredo a partir dela), e o
+  // comprimento do segredo não revela o valor. Serve só pra descobrir por que a validação está
+  // recusando toda mensagem de verdade da Meta. Remover depois de resolver.
+  if (!appSecret) {
+    console.error("[webhook diagnóstico] META_APP_SECRET não está definido no ambiente.");
+    return false;
+  }
+
+  if (!assinaturaRecebida) {
+    console.error(
+      "[webhook diagnóstico] A requisição não trouxe o header x-hub-signature-256 nenhum."
+    );
+    return false;
+  }
 
   const esperada =
     "sha256=" + crypto.createHmac("sha256", appSecret).update(corpoBruto, "utf8").digest("hex");
@@ -18,8 +33,20 @@ export function assinaturaValida(corpoBruto: string, assinaturaRecebida: string 
   const bufferEsperado = Buffer.from(esperada, "utf8");
   const bufferRecebido = Buffer.from(assinaturaRecebida, "utf8");
 
-  if (bufferEsperado.length !== bufferRecebido.length) return false;
-  return crypto.timingSafeEqual(bufferEsperado, bufferRecebido);
+  const bate =
+    bufferEsperado.length === bufferRecebido.length &&
+    crypto.timingSafeEqual(bufferEsperado, bufferRecebido);
+
+  if (!bate) {
+    console.error("[webhook diagnóstico] Assinatura não bateu.", {
+      assinaturaRecebida,
+      assinaturaEsperada: esperada,
+      tamanhoDoAppSecret: appSecret.length,
+      tamanhoDoCorpoBruto: corpoBruto.length,
+    });
+  }
+
+  return bate;
 }
 
 /**
