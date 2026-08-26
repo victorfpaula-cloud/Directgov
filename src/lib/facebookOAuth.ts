@@ -11,9 +11,15 @@ const GRAPH_API_VERSION = "v21.0";
 // Empresas". As versões "instagram_business_*" são da API separada de "Instagram API with
 // Instagram Login" (login pelo instagram.com) — o Facebook rejeita elas aqui com "Invalid
 // Scopes" porque não é esse o fluxo que estamos usando (corrigido em 26/08/2026).
+//
+// "pages_messaging" também é obrigatório — sem ele o Facebook recusa a inscrição da Página pra
+// receber o campo "messages" no webhook com o erro "(#200) To subscribe to the messages field,
+// one of these permissions is needed: pages_messaging" (achado em 26/08/2026 testando a conexão
+// de ponta a ponta — a Página conectava mas nunca recebia Direct).
 const ESCOPOS = [
   "pages_show_list",
   "pages_read_engagement",
+  "pages_messaging",
   "instagram_basic",
   "instagram_manage_messages",
 ].join(",");
