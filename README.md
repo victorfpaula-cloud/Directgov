@@ -9,11 +9,14 @@ cadastro na Meta), mas reaproveitando o **mesmo projeto Supabase** (tabelas com 
 Stack: Next.js 14 (App Router, TypeScript) + Tailwind + Supabase (Postgres) + Meta Graph API
 (Instagram messaging) + Gemini (atendimento por IA).
 
-## Estado atual: Etapa 1 — infraestrutura base
+## Estado atual: Etapa 2 — webhook recebendo mensagens (em andamento)
 
-Só uma página "em construção". Ainda não tem webhook, não tem conexão de conta, não tem lógica
-nenhuma. O objetivo desta etapa é só validar que o caminho GitHub → Vercel → ar está funcionando
-antes de construir qualquer coisa de verdade.
+O webhook já existe (`src/app/api/webhook/instagram/route.ts`): confere o handshake de
+verificação da Meta, valida a assinatura de cada chamada (`X-Hub-Signature-256`), evita processar
+a mesma mensagem duas vezes (`chatbot_processed_messages`) e responde com um texto fixo de teste.
+**Ainda não responde de verdade** porque nenhuma conta está conectada em `chatbot_accounts` — o
+próximo passo é construir a tela de conexão (`/contas/conectar`, via Facebook Login + escolha de
+Página, no mesmo padrão do agendador) antes de dar pra testar de ponta a ponta.
 
 ## Como rodar (visão geral, não precisa fazer isso localmente)
 
