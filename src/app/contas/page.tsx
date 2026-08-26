@@ -17,7 +17,7 @@ const MENSAGENS_DE_ERRO: Record<string, string> = {
 export default async function ContasPage({
   searchParams,
 }: {
-  searchParams: { erro?: string; conectada?: string };
+  searchParams: { erro?: string; conectada?: string; aviso?: string };
 }) {
   const admin = criarClienteAdmin();
   const { data: contas } = await admin
@@ -26,6 +26,7 @@ export default async function ContasPage({
     .order("created_at", { ascending: true });
 
   const mensagemDeErro = searchParams.erro ? MENSAGENS_DE_ERRO[searchParams.erro] : null;
+  const avisoFalhaWebhook = searchParams.aviso === "falha_ao_inscrever_webhook";
 
   return (
     <main className="mx-auto max-w-xl px-6 py-10">
@@ -43,6 +44,13 @@ export default async function ContasPage({
       {mensagemDeErro && (
         <div className="mt-4 rounded-lg border border-red-900 bg-red-950 px-4 py-2 text-sm text-red-300">
           {mensagemDeErro}
+        </div>
+      )}
+
+      {avisoFalhaWebhook && (
+        <div className="mt-4 rounded-lg border border-yellow-900 bg-yellow-950 px-4 py-2 text-sm text-yellow-300">
+          A conta foi conectada, mas não conseguimos inscrever ela pra receber mensagens (o
+          Facebook recusou o pedido). Tenta conectar essa mesma conta de novo em instantes.
         </div>
       )}
 
