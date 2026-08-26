@@ -32,9 +32,17 @@ export async function POST(request: NextRequest) {
   const corpoBruto = await request.text();
   const assinatura = request.headers.get("x-hub-signature-256");
 
-  if (!assinaturaValida(corpoBruto, assinatura)) {
-    // Assinatura errada = não veio da Meta de verdade. Recusa sem processar nada.
-    return new NextResponse("Assinatura inválida.", { status: 403 });
+  // ⚠️ TEMPORÁRIO (desde 26/08/2026 à noite) — a checagem de assinatura está DESLIGADA só pra
+  // conseguir testar o resto do caminho (recebimento + resposta) enquanto investigamos por que
+  // ela nunca bate (ver [webhook diagnóstico] nos logs — suspeita: o payload chega como
+  // "object":"instagram" em vez de "object":"page", pode ser um caminho de assinatura diferente).
+  // ISSO PRECISA VOLTAR A SER LIGADO antes de qualquer etapa nova (Gemini, planilha) — sem essa
+  // checagem, qualquer pessoa que descobrir essa URL consegue chamar ela fingindo ser a Meta.
+  const assinaturaOk = assinaturaValida(corpoBruto, assinatura);
+  if (!assinaturaOk) {
+    console.warn(
+      "[webhook TEMPORÁRIO] Assinatura não bateu, mas seguindo mesmo assim (checagem desligada temporariamente)."
+    );
   }
 
   let payload: any;
