@@ -9,14 +9,21 @@ cadastro na Meta), mas reaproveitando o **mesmo projeto Supabase** (tabelas com 
 Stack: Next.js 14 (App Router, TypeScript) + Tailwind + Supabase (Postgres) + Meta Graph API
 (Instagram messaging) + Gemini (atendimento por IA).
 
-## Estado atual: Etapa 2 — webhook recebendo mensagens (em andamento)
+## Estado atual: Etapa 2 — webhook + conexão de conta (quase completa)
 
-O webhook já existe (`src/app/api/webhook/instagram/route.ts`): confere o handshake de
-verificação da Meta, valida a assinatura de cada chamada (`X-Hub-Signature-256`), evita processar
-a mesma mensagem duas vezes (`chatbot_processed_messages`) e responde com um texto fixo de teste.
-**Ainda não responde de verdade** porque nenhuma conta está conectada em `chatbot_accounts` — o
-próximo passo é construir a tela de conexão (`/contas/conectar`, via Facebook Login + escolha de
-Página, no mesmo padrão do agendador) antes de dar pra testar de ponta a ponta.
+- **Webhook** (`src/app/api/webhook/instagram/route.ts`): confere o handshake de verificação da
+  Meta, valida a assinatura de cada chamada (`X-Hub-Signature-256`), evita processar a mesma
+  mensagem duas vezes (`chatbot_processed_messages`) e responde com um texto fixo de teste.
+  Configurado e verificado no painel do Meta (Callback URL + campo `messages` assinado).
+- **Conexão de conta** (`/contas`, `/contas/conectar`, `src/lib/facebookOAuth.ts`): login via
+  Facebook Login (mesmo padrão do agendador), lista as Páginas com Instagram vinculado, e deixa
+  escolher qual conectar. Ainda falta **adicionar a URL de redirecionamento do OAuth
+  (`/api/auth/facebook/callback`) nas configurações de "Login do Facebook para Empresas" do app
+  do chatbot no painel do Meta** — sem isso o Facebook recusa o redirecionamento na volta do
+  login.
+
+Depois disso: testar de ponta a ponta (conectar uma conta de teste, mandar um Direct, ver a
+resposta fixa chegando) antes de seguir pra Etapa 3.
 
 ## Como rodar (visão geral, não precisa fazer isso localmente)
 
