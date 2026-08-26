@@ -90,15 +90,47 @@ export type PaginaComInstagram = {
 };
 
 /**
+ * Busca a conta do Instagram profissional vinculada a UMA Página específica, usando o token da
+ * própria Página (não o token do usuário). Separado em duas chamadas — em vez de pedir o campo
+ * aninhado "instagram_business_account" já na listagem de /me/accounts — porque é exatamente o
+ * jeito que o agendador faz (conferido no código dele em 26/08/2026) e é o único jeito que
+ * comprovadamente mostra TODAS as Páginas certo, sem sumir com nenhuma.
+ */
+async function buscarContaInstagramDaPagina(
+  pageId: string,
+  pageAccessToken: string
+): Promise<{ id: string; username: string | null } | null> {
+  const resposta = await fetch(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}?fields=instagram_business_account{id,username}&access_token=${encodeURIComponent(
+      pageAccessToken
+    )}`,
+    { cache: "no-store" }
+  );
+
+  if (!resposta.ok) return null;
+
+  const dados = await resposta.json();
+  const conta = dados?.instagram_business_account as { id: string; username?: string } | undefined;
+  if (!conta?.id) return null;
+
+  return { id: conta.id, username: conta.username ?? null };
+}
+
+/**
  * Lista as Páginas que o usuário administra e, pra cada uma, busca a conta do Instagram
  * profissional vinculada (só entram na lista as Páginas que TÊM uma conta do Instagram
  * conectada — sem isso não tem como receber Direct).
+ *
+ * Feito em duas etapas (primeiro TODAS as Páginas, depois o Instagram de cada uma separado) —
+ * corrigido em 26/08/2026 porque a versão anterior, que pedia tudo numa chamada só, estava
+ * fazendo várias Páginas sumirem da lista sem motivo aparente (só 4 de muitas apareciam). Com
+ * "limit=100" também, igual o agendador usa, pra não cortar quem administra muitas Páginas.
  */
 export async function listarPaginasComInstagram(
   tokenDeUsuario: string
 ): Promise<PaginaComInstagram[]> {
   const resposta = await fetch(
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${encodeURIComponent(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/me/accounts?fields=id,name,access_token&limit=100&access_token=${encodeURIComponent(
       tokenDeUsuario
     )}`,
     { cache: "no-store" }
@@ -111,13 +143,20 @@ export async function listarPaginasComInstagram(
   const dados = await resposta.json();
   const paginas: any[] = Array.isArray(dados?.data) ? dados.data : [];
 
-  return paginas
-    .filter((pagina) => pagina.instagram_business_account?.id)
-    .map((pagina) => ({
-      page_id: pagina.id,
-      page_name: pagina.name,
-      page_access_token: pagina.access_token,
-      instagram_user_id: pagina.instagram_business_account.id,
-      instagram_username: pagina.instagram_business_account.username ?? null,
-    }));
+  const resultados = await Promise.all(
+    paginas.map(async (pagina) => {
+      const contaInstagram = await buscarContaInstagramDaPagina(pagina.id, pagina.access_token);
+      if (!contaInstagram) return null;
+
+      return {
+        page_id: pagina.id as string,
+        page_name: pagina.name as string,
+        page_access_token: pagina.access_token as string,
+        instagram_user_id: contaInstagram.id,
+        instagram_username: contaInstagram.username,
+      };
+    })
+  );
+
+  return resultados.filter((item): item is PaginaComInstagram => item !== null);
 }
