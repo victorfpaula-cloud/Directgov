@@ -42,7 +42,9 @@ export function assinaturaValida(corpoBruto: string, assinaturaRecebida: string 
       assinaturaRecebida,
       assinaturaEsperada: esperada,
       tamanhoDoAppSecret: appSecret.length,
-      tamanhoDoCorpoBruto: corpoBruto.length,
+      tamanhoDoCorpoBrutoEmCaracteres: corpoBruto.length,
+      tamanhoDoCorpoBrutoEmBytes: Buffer.byteLength(corpoBruto, "utf8"),
+      inicioDoCorpoBruto: corpoBruto.slice(0, 120),
     });
   }
 
