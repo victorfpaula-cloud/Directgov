@@ -80,15 +80,34 @@ export async function POST(request: NextRequest) {
 async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAdmin>, evento: any) {
   const mensagem = evento?.message;
 
+  // Log temporário de diagnóstico (26/08/2026 à noite) — pra ver exatamente o que cada evento
+  // contém, já que nem o aviso de "conta não encontrada" nem o de erro ao enviar estavam
+  // aparecendo (sinal de que a função estava parando antes disso, silenciosamente). Remover
+  // depois de resolver.
+  console.log("[webhook TEMPORÁRIO] Evento recebido:", JSON.stringify(evento));
+
   // Ignora eco (mensagens que o próprio app/Página mandou, que a Meta manda de volta pro
   // webhook) — sem essa checagem o sistema entraria em loop respondendo a si mesmo.
-  if (!mensagem || mensagem.is_echo) return;
+  if (!mensagem || mensagem.is_echo) {
+    console.log("[webhook TEMPORÁRIO] Ignorado: sem 'message' no evento, ou é eco.", {
+      temMensagem: Boolean(mensagem),
+      ehEco: mensagem?.is_echo ?? null,
+    });
+    return;
+  }
 
   const idDaMensagem: string | undefined = mensagem.mid;
   const idDoCliente: string | undefined = evento?.sender?.id;
   const idDaContaRecebendo: string | undefined = evento?.recipient?.id;
 
-  if (!idDaMensagem || !idDoCliente || !idDaContaRecebendo) return;
+  if (!idDaMensagem || !idDoCliente || !idDaContaRecebendo) {
+    console.log("[webhook TEMPORÁRIO] Ignorado: faltou id da mensagem, do cliente ou da conta.", {
+      idDaMensagem,
+      idDoCliente,
+      idDaContaRecebendo,
+    });
+    return;
+  }
 
   // Idempotência: a Meta pode reenviar o mesmo evento em caso de timeout/retry. Tenta inserir
   // primeiro — se já existe (violação da chave primária), já foi processada, então para aqui.
