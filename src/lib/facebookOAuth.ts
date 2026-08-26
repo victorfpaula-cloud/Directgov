@@ -5,13 +5,17 @@
 const GRAPH_API_VERSION = "v21.0";
 
 // Escopos mínimos: enxergar a lista de Páginas do usuário, ler engajamento básico (exigido
-// junto com pages_show_list em apps novos), e as duas permissões do Instagram já confirmadas
-// como "Pronto para teste" no painel do app (ver plano-chatbot-direct.md).
+// junto com pages_show_list em apps novos), e as permissões do Instagram — usando os nomes
+// "clássicos" (instagram_basic / instagram_manage_messages), que são os aceitos pelo diálogo
+// clássico do Facebook (facebook.com/dialog/oauth) usado no fluxo "Login do Facebook para
+// Empresas". As versões "instagram_business_*" são da API separada de "Instagram API with
+// Instagram Login" (login pelo instagram.com) — o Facebook rejeita elas aqui com "Invalid
+// Scopes" porque não é esse o fluxo que estamos usando (corrigido em 26/08/2026).
 const ESCOPOS = [
   "pages_show_list",
   "pages_read_engagement",
-  "instagram_business_basic",
-  "instagram_business_manage_messages",
+  "instagram_basic",
+  "instagram_manage_messages",
 ].join(",");
 
 function urlBaseDoApp(): string {
