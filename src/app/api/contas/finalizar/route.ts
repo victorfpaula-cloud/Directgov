@@ -8,7 +8,10 @@ const GRAPH_API_VERSION = "v21.0";
 // nosso app — mesmo com o webhook configurado certinho no painel do Meta, sem essa "inscrição"
 // por Página nenhuma mensagem chega no nosso endpoint. Faltava essa chamada (26/08/2026, achado
 // ao testar a primeira conta de ponta a ponta e a resposta automática não chegar).
-async function inscreverPaginaNoWebhook(pageId: string, pageAccessToken: string): Promise<boolean> {
+async function inscreverPaginaNoWebhook(
+  pageId: string,
+  pageAccessToken: string
+): Promise<{ ok: boolean; erro?: string }> {
   const resposta = await fetch(
     `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}/subscribed_apps?subscribed_fields=messages&access_token=${encodeURIComponent(
       pageAccessToken
@@ -16,7 +19,19 @@ async function inscreverPaginaNoWebhook(pageId: string, pageAccessToken: string)
     { method: "POST", cache: "no-store" }
   );
 
-  return resposta.ok;
+  if (resposta.ok) {
+    return { ok: true };
+  }
+
+  // Captura o motivo de verdade que o Facebook devolveu, em vez de só saber que falhou —
+  // sem isso não tem como diagnosticar o que está sendo recusado (26/08/2026).
+  const dados = await resposta.json().catch(() => null);
+  const mensagemDoFacebook: string =
+    dados?.error?.message ?? `Erro desconhecido (status HTTP ${resposta.status}).`;
+
+  console.error("Falha ao inscrever Página no webhook:", dados?.error ?? dados);
+
+  return { ok: false, erro: mensagemDoFacebook };
 }
 
 // Recebe a escolha de qual Página/conta do Instagram conectar (formulário de /contas/conectar),
@@ -69,16 +84,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(new URL("/contas?erro=falha_ao_salvar_conta", request.url));
   }
 
-  const inscricaoOk = await inscreverPaginaNoWebhook(
+  const inscricao = await inscreverPaginaNoWebhook(
     paginaEscolhida.page_id,
     paginaEscolhida.page_access_token
   );
 
-  if (!inscricaoOk) {
-    // A conta já foi salva — só a inscrição no webhook falhou. Avisa mas não desfaz a conexão.
-    return NextResponse.redirect(
-      new URL("/contas?conectada=1&aviso=falha_ao_inscrever_webhook", request.url)
-    );
+  if (!inscricao.ok) {
+    // A conta já foi salva — só a inscrição no webhook falhou. Avisa (com o motivo de verdade
+    // do Facebook na própria URL, pra dar pra ler sem precisar abrir log da Vercel) mas não
+    // desfaz a conexão.
+    const url = new URL("/contas?conectada=1&aviso=falha_ao_inscrever_webhook", request.url);
+    if (inscricao.erro) {
+      url.searchParams.set("detalhe", inscricao.erro);
+    }
+    return NextResponse.redirect(url);
   }
 
   return NextResponse.redirect(new URL("/contas?conectada=1", request.url));
