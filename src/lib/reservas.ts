@@ -427,9 +427,7 @@ async function buscarConfig(admin: Admin, accountId: string) {
   return admin
     .from("chatbot_account_settings")
     .select(
-      "reserva_regras_texto, reserva_mensagem_limite_maximo, reserva_limite_maximo, reserva_cutoff_horario, google_sheet_id, " +
-        "reserva_msg_inicial, reserva_msg_pergunta_data, reserva_msg_pergunta_periodo, reserva_msg_pergunta_pessoas, " +
-        "reserva_msg_pergunta_whatsapp, reserva_msg_confirmada, reserva_msg_recusada"
+      "reserva_regras_texto, reserva_mensagem_limite_maximo, reserva_limite_maximo, reserva_cutoff_horario, google_sheet_id, reserva_msg_inicial, reserva_msg_pergunta_data, reserva_msg_pergunta_periodo, reserva_msg_pergunta_pessoas, reserva_msg_pergunta_whatsapp, reserva_msg_confirmada, reserva_msg_recusada"
     )
     .eq("account_id", accountId)
     .maybeSingle();
