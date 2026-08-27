@@ -65,21 +65,29 @@ export default async function ContasPage({
         {(contas ?? []).map((conta) => (
           <div
             key={conta.id}
-            className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3"
+            className="rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3"
           >
-            <div>
-              <div className="text-sm font-medium">{conta.page_name}</div>
-              <div className="text-xs text-neutral-400">@{conta.instagram_username}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium">{conta.page_name}</div>
+                <div className="text-xs text-neutral-400">@{conta.instagram_username}</div>
+              </div>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  conta.active
+                    ? "border border-green-900 bg-green-950 text-green-300"
+                    : "border border-neutral-700 bg-neutral-800 text-neutral-400"
+                }`}
+              >
+                {conta.active ? "Ativa" : "Pausada"}
+              </span>
             </div>
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                conta.active
-                  ? "border border-green-900 bg-green-950 text-green-300"
-                  : "border border-neutral-700 bg-neutral-800 text-neutral-400"
-              }`}
+            <a
+              href={`/contas/${conta.id}/palavras-chave`}
+              className="mt-2 inline-block text-xs text-neutral-400 underline hover:text-neutral-300"
             >
-              {conta.active ? "Ativa" : "Pausada"}
-            </span>
+              Palavras-chave
+            </a>
           </div>
         ))}
 
