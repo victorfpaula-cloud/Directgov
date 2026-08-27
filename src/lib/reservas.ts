@@ -6,6 +6,18 @@ import {
 } from "@/lib/metaMessaging";
 import { adicionarLinhaNaPlanilha } from "@/lib/googleSheets";
 
+// Etapa 6 — fluxo de reserva com estado: a conta responde normal (palavra-chave, Gemini) até
+// alguém escrever a palavra-chave configurada em `palavra_chave_reserva`. Daí em diante, cada
+// mensagem nova dessa pessoa é tratada como resposta da pergunta atual (nunca cai em
+// palavra-chave/Gemini até o fluxo terminar) — o estado de "em que pergunta a pessoa está" fica
+// guardado em `chatbot_conversations`, e a reserva confirmada vira uma linha em
+// `chatbot_reservations` + uma linha na planilha do Google.
+//
+// Todas as mensagens fixas do fluxo (saudação inicial e as perguntas de cada etapa, além das
+// mensagens de reserva confirmada/recusada) podem ser personalizadas por conta em
+// `chatbot_account_settings` (campos `reserva_msg_*`) — se a conta não configurou nada, cai no
+// texto padrão de sempre (mesmo comportamento de antes dessa personalização existir).
+
 type Admin = ReturnType<typeof criarClienteAdmin>;
 type Conta = { id: string; access_token: string };
 
@@ -17,6 +29,11 @@ const RESERVA_PERIODO_JANTAR = "RESERVA_PERIODO_JANTAR";
 const RESERVA_CONFIRMAR_SIM = "RESERVA_CONFIRMAR_SIM";
 const RESERVA_CONFIRMAR_NAO = "RESERVA_CONFIRMAR_NAO";
 
+/**
+ * Ponto de entrada, chamado pelo webhook ANTES da checagem de palavra-chave comum. Devolve
+ * `true` quando tratou a mensagem (o webhook para por ali), `false` quando não tem nada a ver
+ * com reserva (o webhook segue pro caminho normal de palavra-chave/Gemini).
+ */
 export async function processarMensagemDeReserva(
   admin: Admin,
   conta: Conta,
@@ -29,7 +46,9 @@ export async function processarMensagemDeReserva(
 
   const { data: config, error: erroAoBuscarConfig } = await admin
     .from("chatbot_account_settings")
-    .select("palavra_chave_reserva, reserva_pausa_ativa, reserva_pausa_mensagem, reserva_cutoff_horario")
+    .select(
+      "palavra_chave_reserva, reserva_pausa_ativa, reserva_pausa_mensagem, reserva_cutoff_horario, reserva_msg_inicial, reserva_msg_pergunta_data"
+    )
     .eq("account_id", conta.id)
     .maybeSingle();
 
@@ -52,6 +71,8 @@ export async function processarMensagemDeReserva(
   if (erroAoBuscarConversa) throw erroAoBuscarConversa;
 
   if (bateuPalavraChave) {
+    // Bateu a palavra-chave — começa (ou recomeça do zero, se já tinha uma reserva pela metade;
+    // ex: a pessoa desistiu e quer começar de novo).
     if (conversa) {
       await admin.from("chatbot_conversations").delete().eq("id", conversa.id);
     }
@@ -64,7 +85,14 @@ export async function processarMensagemDeReserva(
       return true;
     }
 
-    await iniciarFluxo(admin, conta, idDoCliente, config?.reserva_cutoff_horario ?? null);
+    await iniciarFluxo(
+      admin,
+      conta,
+      idDoCliente,
+      config?.reserva_cutoff_horario ?? null,
+      config?.reserva_msg_inicial ?? null,
+      config?.reserva_msg_pergunta_data ?? null
+    );
     return true;
   }
 
@@ -80,7 +108,9 @@ async function iniciarFluxo(
   admin: Admin,
   conta: Conta,
   idDoCliente: string,
-  cutoff: string | null
+  cutoff: string | null,
+  mensagemInicial: string | null,
+  mensagemPerguntaData: string | null
 ) {
   const perfil = await buscarPerfilDoCliente(conta.access_token, idDoCliente);
 
@@ -93,10 +123,22 @@ async function iniciarFluxo(
     atualizado_em: new Date().toISOString(),
   });
 
-  await perguntarData(conta, idDoCliente, cutoff);
+  // Saudação inicial — só existe se a conta tiver configurado uma (campo opcional). Sem ela, o
+  // fluxo começa direto na pergunta da data, exatamente como sempre funcionou.
+  const saudacao = mensagemInicial?.trim();
+  if (saudacao) {
+    await enviarMensagemDirect(conta.access_token, idDoCliente, saudacao);
+  }
+
+  await perguntarData(conta, idDoCliente, cutoff, mensagemPerguntaData);
 }
 
-async function perguntarData(conta: Conta, idDoCliente: string, cutoff: string | null) {
+async function perguntarData(
+  conta: Conta,
+  idDoCliente: string,
+  cutoff: string | null,
+  mensagemPergunta?: string | null
+) {
   const agora = agoraEmSaoPaulo();
   const hojeFechado = passouDoCutoff(cutoff, agora.hora, agora.minuto);
 
@@ -114,16 +156,17 @@ async function perguntarData(conta: Conta, idDoCliente: string, cutoff: string |
   const opcoesTexto = botoes.map((b) => b.titulo).join(", ");
   const aviso = hojeFechado ? "Nossas reservas de hoje já encerraram, mas posso te ajudar pra outro dia. " : "";
 
-  await enviarMensagemComBotoes(
-    conta.access_token,
-    idDoCliente,
-    `${aviso}Pra qual dia você quer reservar? Toque num botão abaixo ou digite: ${opcoesTexto}.`,
-    botoes
-  );
+  const perguntaBase =
+    mensagemPergunta?.trim() ||
+    `Pra qual dia você quer reservar? Toque num botão abaixo ou digite: ${opcoesTexto}.`;
+
+  await enviarMensagemComBotoes(conta.access_token, idDoCliente, `${aviso}${perguntaBase}`, botoes);
 }
 
-async function perguntarPeriodo(conta: Conta, idDoCliente: string) {
-  await enviarMensagemComBotoes(conta.access_token, idDoCliente, "É pro Almoço ou Jantar?", [
+async function perguntarPeriodo(conta: Conta, idDoCliente: string, mensagemPergunta?: string | null) {
+  const texto = mensagemPergunta?.trim() || "É pro Almoço ou Jantar?";
+
+  await enviarMensagemComBotoes(conta.access_token, idDoCliente, texto, [
     { titulo: "Almoço", payload: RESERVA_PERIODO_ALMOCO },
     { titulo: "Jantar", payload: RESERVA_PERIODO_JANTAR },
   ]);
@@ -172,11 +215,12 @@ async function continuarFluxo(
       dados.data_reserva = paraISO(dataEscolhida);
       dados.data_reserva_br = formatarDataBR(dataEscolhida);
       await atualizarEtapa(admin, conversa.id, "periodo", dados);
-      await perguntarPeriodo(conta, idDoCliente);
+      await perguntarPeriodo(conta, idDoCliente, config?.reserva_msg_pergunta_periodo);
       return;
     }
 
     case "data_customizada": {
+      const { data: config } = await buscarConfig(admin, conta.id);
       const agora = agoraEmSaoPaulo();
       const dataLivre = textoDaMensagem ? parseDataLivre(textoDaMensagem, agora) : null;
 
@@ -192,7 +236,7 @@ async function continuarFluxo(
       dados.data_reserva = paraISO(dataLivre);
       dados.data_reserva_br = formatarDataBR(dataLivre);
       await atualizarEtapa(admin, conversa.id, "periodo", dados);
-      await perguntarPeriodo(conta, idDoCliente);
+      await perguntarPeriodo(conta, idDoCliente, config?.reserva_msg_pergunta_periodo);
       return;
     }
 
@@ -204,7 +248,10 @@ async function continuarFluxo(
       }
       dados.periodo = periodo;
       await atualizarEtapa(admin, conversa.id, "pessoas", dados);
-      await enviarMensagemDirect(conta.access_token, idDoCliente, "Pra quantas pessoas é a reserva?");
+
+      const { data: config } = await buscarConfig(admin, conta.id);
+      const perguntaPessoas = config?.reserva_msg_pergunta_pessoas?.trim() || "Pra quantas pessoas é a reserva?";
+      await enviarMensagemDirect(conta.access_token, idDoCliente, perguntaPessoas);
       return;
     }
 
@@ -233,7 +280,9 @@ async function continuarFluxo(
 
       dados.quantidade_pessoas = quantidade;
       await atualizarEtapa(admin, conversa.id, "whatsapp", dados);
-      await enviarMensagemDirect(conta.access_token, idDoCliente, "Qual o melhor WhatsApp pra contato?");
+
+      const perguntaWhatsapp = config?.reserva_msg_pergunta_whatsapp?.trim() || "Qual o melhor WhatsApp pra contato?";
+      await enviarMensagemDirect(conta.access_token, idDoCliente, perguntaWhatsapp);
       return;
     }
 
@@ -257,6 +306,10 @@ async function continuarFluxo(
       const regras = config?.reserva_regras_texto?.trim();
       const periodoTexto = dados.periodo === "almoco" ? "almoço" : "jantar";
 
+      // As Regras (texto livre, cadastrado por conta — pode ser bem longo) vão numa mensagem de
+      // texto simples, SEPARADA da mensagem com botão. Mensagens com botão têm um limite de
+      // caracteres bem mais curto que uma mensagem de texto normal — mandar tudo junto arriscaria
+      // estourar esse limite dependendo do tamanho das regras cadastradas.
       if (regras) {
         await enviarMensagemDirect(conta.access_token, idDoCliente, regras);
       }
@@ -286,11 +339,11 @@ async function continuarFluxo(
       }
 
       if (!confirmou) {
-        await enviarMensagemDirect(
-          conta.access_token,
-          idDoCliente,
-          "Sem problema, fica pra próxima! Se quiser reservar depois, é só chamar de novo."
-        );
+        const { data: config } = await buscarConfig(admin, conta.id);
+        const mensagemRecusada =
+          config?.reserva_msg_recusada?.trim() ||
+          "Sem problema, fica pra próxima! Se quiser reservar depois, é só chamar de novo.";
+        await enviarMensagemDirect(conta.access_token, idDoCliente, mensagemRecusada);
         await encerrarConversa(admin, conversa.id);
         return;
       }
@@ -301,6 +354,8 @@ async function continuarFluxo(
     }
 
     default: {
+      // Etapa desconhecida (não deveria acontecer) — encerra o fluxo pra não travar a conversa
+      // num estado sem saída.
       await encerrarConversa(admin, conversa.id);
       return;
     }
@@ -337,11 +392,13 @@ async function finalizarReserva(admin: Admin, conta: Conta, idDoCliente: string,
     return;
   }
 
-  await enviarMensagemDirect(
-    conta.access_token,
-    idDoCliente,
-    "Reserva confirmada! Te esperamos por lá. Qualquer mudança, é só chamar por aqui de novo."
-  );
+  // Avisa o cliente ANTES de tentar escrever na planilha — a reserva já está garantida no banco
+  // nesse ponto, então uma falha na planilha (rede, permissão) não pode virar um "não deu certo"
+  // falso pro cliente.
+  const mensagemConfirmada =
+    config?.reserva_msg_confirmada?.trim() ||
+    "Reserva confirmada! Te esperamos por lá. Qualquer mudança, é só chamar por aqui de novo.";
+  await enviarMensagemDirect(conta.access_token, idDoCliente, mensagemConfirmada);
 
   const idDaPlanilha = config?.google_sheet_id;
   if (idDaPlanilha && reservaSalva) {
@@ -370,7 +427,9 @@ async function buscarConfig(admin: Admin, accountId: string) {
   return admin
     .from("chatbot_account_settings")
     .select(
-      "reserva_regras_texto, reserva_mensagem_limite_maximo, reserva_limite_maximo, reserva_cutoff_horario, google_sheet_id"
+      "reserva_regras_texto, reserva_mensagem_limite_maximo, reserva_limite_maximo, reserva_cutoff_horario, google_sheet_id, " +
+        "reserva_msg_inicial, reserva_msg_pergunta_data, reserva_msg_pergunta_periodo, reserva_msg_pergunta_pessoas, " +
+        "reserva_msg_pergunta_whatsapp, reserva_msg_confirmada, reserva_msg_recusada"
     )
     .eq("account_id", accountId)
     .maybeSingle();
@@ -386,6 +445,8 @@ async function atualizarEtapa(admin: Admin, conversaId: string, etapa: string, d
 async function encerrarConversa(admin: Admin, conversaId: string) {
   await admin.from("chatbot_conversations").delete().eq("id", conversaId);
 }
+
+// --- Interpretação de respostas (aceita clique no botão OU texto digitado, sempre) ---
 
 function interpretarData(
   payload: string | undefined,
@@ -432,6 +493,8 @@ function interpretarSimNao(payload: string | undefined, texto: string | undefine
   if (/^(nao|n|cancela|cancelar)\b/.test(t)) return false;
   return null;
 }
+
+// --- Data/hora em São Paulo, sem depender de biblioteca externa ---
 
 type DataSimples = { ano: number; mes: number; dia: number };
 
