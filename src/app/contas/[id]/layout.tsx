@@ -47,6 +47,12 @@ export default async function ContaLayout({
             >
               Reserva
             </a>
+            <a
+              href={`/contas/${conta.id}/atendimentos`}
+              className="rounded-lg px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-900"
+            >
+              Atendimentos
+            </a>
           </nav>
 
           <div className="mt-6">{children}</div>
