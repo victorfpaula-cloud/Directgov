@@ -53,13 +53,28 @@ export async function POST(request: NextRequest) {
 }
 
 async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAdmin>, evento: any) {
-  const mensagem = evento?.message;
+  const mensagemOriginal = evento?.message;
+  const postback = evento?.postback;
 
-  if (!mensagem || mensagem.is_echo) {
+  if (mensagemOriginal?.is_echo) {
     return;
   }
 
-  const idDaMensagem: string | undefined = mensagem.mid;
+  if (!mensagemOriginal && !postback) {
+    return;
+  }
+
+  // Toque num botão do novo formato (Button Template, usado no fluxo de reserva) chega como um
+  // evento "postback", NÃO como "message" — é um formato totalmente diferente da Meta. Normaliza
+  // aqui pro mesmo formato que o resto do código já entende (`quick_reply.payload`), então nada
+  // mais precisa saber se foi um toque de botão ou uma resposta digitada.
+  const mensagem: { text?: string; quick_reply?: { payload: string } } = postback
+    ? { quick_reply: { payload: postback.payload } }
+    : mensagemOriginal;
+
+  const idDaMensagem: string | undefined = postback
+    ? postback.mid ?? `postback_${evento?.sender?.id}_${evento?.timestamp}_${postback.payload}`
+    : mensagemOriginal?.mid;
   const idDoCliente: string | undefined = evento?.sender?.id;
   const idDaContaRecebendo: string | undefined = evento?.recipient?.id;
   const textoDaMensagem: string | undefined = mensagem.text;
@@ -94,8 +109,10 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
   }
 
   // Etapa 6 — fluxo de reserva: checa ANTES de palavra-chave/Gemini, porque enquanto alguém está
-  // no meio de uma reserva, toda mensagem nova dessa pessoa precisa ser tratada como resposta da
-  // pergunta atual — nunca cair no atendimento normal por engano.
+  // no meio de uma reserva (respondendo data/período/pessoas/WhatsApp/confirmação), toda mensagem
+  // nova dessa pessoa precisa ser tratada como resposta da pergunta atual — nunca cair no
+  // atendimento normal por engano. Se `processarMensagemDeReserva` devolver `true`, já cuidou de
+  // tudo (mandou a próxima pergunta, ou terminou o fluxo) e paramos por aqui.
   const tratadoPeloFluxoDeReserva = await processarMensagemDeReserva(admin, conta, idDoCliente, mensagem);
   if (tratadoPeloFluxoDeReserva) return;
 
@@ -138,6 +155,7 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return;
   }
 
+  // Nenhuma palavra-chave bateu — Etapa 5: cai no fallback do Gemini.
   await responderComGemini(admin, conta, idDoCliente, textoDaMensagem);
 }
 
