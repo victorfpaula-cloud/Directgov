@@ -14,7 +14,7 @@ export default async function ReservaConfigPage({
   const { data: config } = await admin
     .from("chatbot_account_settings")
     .select(
-      "palavra_chave_reserva, reserva_regras_texto, reserva_limite_normal, reserva_limite_maximo, reserva_mensagem_limite_maximo, reserva_cutoff_horario, reserva_pausa_ativa, reserva_pausa_data, reserva_pausa_mensagem, google_sheet_id, reserva_msg_inicial, reserva_msg_pergunta_data, reserva_msg_pergunta_periodo, reserva_msg_pergunta_pessoas, reserva_msg_pergunta_whatsapp, reserva_msg_confirmada, reserva_msg_recusada"
+      "palavra_chave_reserva, reserva_regras_texto, reserva_limite_normal, reserva_limite_maximo, reserva_mensagem_limite_maximo, reserva_cutoff_horario, reserva_pausa_ativa, reserva_pausa_data, reserva_pausa_mensagem, google_sheet_id, reserva_msg_inicial, reserva_msg_pergunta_data, reserva_msg_pergunta_periodo, reserva_msg_pergunta_pessoas, reserva_msg_pergunta_whatsapp, reserva_msg_confirmada, reserva_msg_recusada, reserva_datas_bloqueadas"
     )
     .eq("account_id", params.id)
     .maybeSingle();
@@ -261,11 +261,16 @@ export default async function ReservaConfigPage({
           </label>
           <p className="mt-1 text-xs text-neutral-500">
             Enquanto estiver marcado, quem mandar a palavra-chave de reserva recebe a mensagem
-            abaixo em vez de começar o fluxo.
+            abaixo em vez de começar o fluxo. Importante: isso não desliga sozinho depois de um
+            tempo — fica pausado até você desmarcar essa caixinha aqui manualmente.
           </p>
 
           <div className="mt-3">
             <label className="text-xs text-neutral-400">Até quando (opcional, só anotação)</label>
+            <p className="mt-1 text-xs text-neutral-500">
+              Isso aqui é só um lembrete visual pra você — o sistema não desmarca a pausa sozinho
+              nessa data, é preciso desmarcar a caixinha "Pausar reservas temporariamente" à mão.
+            </p>
             <input
               type="date"
               name="reserva_pausa_data"
@@ -284,6 +289,28 @@ export default async function ReservaConfigPage({
               className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
             />
           </div>
+        </div>
+
+        <div className="rounded-lg border border-neutral-800 p-4">
+          <p className="text-sm font-medium text-neutral-200">Bloquear datas específicas</p>
+          <p className="mt-1 text-xs text-neutral-500">
+            Diferente da pausa acima (que trava TUDO na hora), isso aqui bloqueia só os dias que
+            você escolher — o resto do fluxo continua funcionando normal, só que ninguém consegue
+            reservar pra esses dias específicos (nem clicando em "Hoje"/"Amanhã" quando bater
+            numa dessas datas, nem digitando a data na mão).
+          </p>
+          <p className="mt-2 text-xs text-neutral-500">
+            Escreva as datas separadas por vírgula, sempre no formato dia/mês/ano completo. Pra
+            bloquear vários dias seguidos de uma vez, escreve a primeira e a última separadas por
+            um traço.
+          </p>
+          <textarea
+            name="reserva_datas_bloqueadas"
+            rows={2}
+            defaultValue={config?.reserva_datas_bloqueadas ?? ""}
+            placeholder="Ex: 25/12/2026, 24/12/2026-26/12/2026, 01/01/2027"
+            className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+          />
         </div>
 
         <button
