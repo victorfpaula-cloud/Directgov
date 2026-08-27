@@ -14,6 +14,22 @@ const MENSAGENS_DE_ERRO: Record<string, string> = {
   falha_ao_salvar_conta: "Deu um erro salvando a conta. Tenta de novo em instantes.",
 };
 
+// Cores do círculo de inicial de cada conta — só um jeito de dar uma diferenciada visual entre
+// contas, escolhida de forma estável a partir do id (a mesma conta sempre cai na mesma cor).
+const CORES_AVATAR = [
+  "bg-emerald-950 text-emerald-300",
+  "bg-sky-950 text-sky-300",
+  "bg-amber-950 text-amber-300",
+  "bg-fuchsia-950 text-fuchsia-300",
+  "bg-rose-950 text-rose-300",
+];
+
+function corAvatar(id: string): string {
+  let soma = 0;
+  for (const caractere of id) soma += caractere.charCodeAt(0);
+  return CORES_AVATAR[soma % CORES_AVATAR.length];
+}
+
 export default async function ContasPage({
   searchParams,
 }: {
@@ -29,8 +45,8 @@ export default async function ContasPage({
   const avisoFalhaWebhook = searchParams.aviso === "falha_ao_inscrever_webhook";
 
   return (
-    <main className="mx-auto max-w-xl px-6 py-10">
-      <h1 className="text-xl font-semibold">Contas conectadas</h1>
+    <main className="mx-auto max-w-3xl px-6 py-10">
+      <h1 className="text-2xl font-semibold">Contas conectadas</h1>
       <p className="mt-1 text-sm text-neutral-400">
         Atendimento automático de Instagram Direct — suas contas conectadas.
       </p>
@@ -61,51 +77,62 @@ export default async function ContasPage({
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-3">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         {(contas ?? []).map((conta) => (
           <div
             key={conta.id}
-            className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3"
+            className={`rounded-2xl border border-neutral-800 bg-neutral-900 p-5 transition ${
+              conta.active ? "" : "opacity-60"
+            }`}
           >
-            <div>
-              <div className="text-sm font-medium">{conta.page_name}</div>
-              <div className="text-xs text-neutral-400">@{conta.instagram_username}</div>
+            <div className="flex items-center justify-between">
+              <div
+                className={`flex h-11 w-11 items-center justify-center rounded-full text-lg font-semibold ${corAvatar(
+                  conta.id
+                )}`}
+              >
+                {conta.page_name.charAt(0).toUpperCase()}
+              </div>
+              {!conta.active && (
+                <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-[11px] font-medium text-neutral-400">
+                  pausada
+                </span>
+              )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  conta.active
-                    ? "border border-green-900 bg-green-950 text-green-300"
-                    : "border border-neutral-700 bg-neutral-800 text-neutral-400"
-                }`}
-              >
-                {conta.active ? "Ativa" : "Pausada"}
-              </span>
+            <p className="mt-3 flex items-center gap-1.5 font-medium text-neutral-100">
+              {conta.active && (
+                <span
+                  title="Ativa"
+                  aria-label="Ativa"
+                  className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-green-500"
+                />
+              )}
+              {conta.page_name}
+            </p>
+            <p className="text-sm text-neutral-500">@{conta.instagram_username}</p>
 
-              <a
-                href={`/contas/${conta.id}/palavras-chave`}
-                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800"
-              >
-                Configurar atendimento
-              </a>
-            </div>
+            <a
+              href={`/contas/${conta.id}/palavras-chave`}
+              className="mt-4 inline-block w-full rounded-lg border border-neutral-700 px-3 py-1.5 text-center text-xs font-medium text-neutral-300 hover:bg-neutral-800"
+            >
+              Configurar atendimento
+            </a>
           </div>
         ))}
 
-        {(contas ?? []).length === 0 && (
-          <p className="rounded-xl border border-dashed border-neutral-700 px-4 py-6 text-center text-sm text-neutral-400">
-            Nenhuma conta conectada ainda.
-          </p>
-        )}
+        <a
+          href="/api/auth/facebook/start"
+          className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-700 p-5 text-neutral-500 transition hover:border-neutral-500 hover:text-neutral-300"
+        >
+          <span className="mb-1 text-2xl leading-none">+</span>
+          <span className="text-sm font-medium">Adicionar conta</span>
+        </a>
       </div>
 
-      <a
-        href="/api/auth/facebook/start"
-        className="mt-4 flex items-center justify-center rounded-xl border border-dashed border-neutral-700 px-4 py-3 text-sm font-medium text-neutral-300 hover:border-neutral-500"
-      >
-        + Adicionar conta
-      </a>
+      {(contas ?? []).length === 0 && (
+        <p className="mt-2 text-sm text-neutral-500">Nenhuma conta conectada ainda.</p>
+      )}
     </main>
   );
 }
