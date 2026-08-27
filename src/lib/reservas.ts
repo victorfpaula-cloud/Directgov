@@ -47,7 +47,7 @@ export async function processarMensagemDeReserva(
   const { data: config, error: erroAoBuscarConfig } = await admin
     .from("chatbot_account_settings")
     .select(
-      "palavra_chave_reserva, reserva_pausa_ativa, reserva_pausa_mensagem, reserva_cutoff_horario, reserva_msg_inicial, reserva_msg_pergunta_data"
+      "palavra_chave_reserva, reserva_pausa_ativa, reserva_pausa_mensagem, reserva_cutoff_horario, reserva_msg_inicial, reserva_msg_pergunta_data, reserva_datas_bloqueadas"
     )
     .eq("account_id", conta.id)
     .maybeSingle();
@@ -91,7 +91,8 @@ export async function processarMensagemDeReserva(
       idDoCliente,
       config?.reserva_cutoff_horario ?? null,
       config?.reserva_msg_inicial ?? null,
-      config?.reserva_msg_pergunta_data ?? null
+      config?.reserva_msg_pergunta_data ?? null,
+      config?.reserva_datas_bloqueadas ?? null
     );
     return true;
   }
@@ -110,7 +111,8 @@ async function iniciarFluxo(
   idDoCliente: string,
   cutoff: string | null,
   mensagemInicial: string | null,
-  mensagemPerguntaData: string | null
+  mensagemPerguntaData: string | null,
+  datasBloqueadasTexto: string | null
 ) {
   const perfil = await buscarPerfilDoCliente(conta.access_token, idDoCliente);
 
@@ -130,31 +132,39 @@ async function iniciarFluxo(
     await enviarMensagemDirect(conta.access_token, idDoCliente, saudacao);
   }
 
-  await perguntarData(conta, idDoCliente, cutoff, mensagemPerguntaData);
+  await perguntarData(conta, idDoCliente, cutoff, mensagemPerguntaData, datasBloqueadasTexto);
 }
 
 async function perguntarData(
   conta: Conta,
   idDoCliente: string,
   cutoff: string | null,
-  mensagemPergunta?: string | null
+  mensagemPergunta?: string | null,
+  datasBloqueadasTexto?: string | null
 ) {
   const agora = agoraEmSaoPaulo();
-  const hojeFechado = passouDoCutoff(cutoff, agora.hora, agora.minuto);
+  const hojeFechadoPorHorario = passouDoCutoff(cutoff, agora.hora, agora.minuto);
 
-  const botoes = hojeFechado
-    ? [
-        { titulo: "Amanhã", payload: RESERVA_DATA_AMANHA },
-        { titulo: "Outro dia", payload: RESERVA_DATA_OUTRO },
-      ]
-    : [
-        { titulo: "Hoje", payload: RESERVA_DATA_HOJE },
-        { titulo: "Amanhã", payload: RESERVA_DATA_AMANHA },
-        { titulo: "Outro dia", payload: RESERVA_DATA_OUTRO },
-      ];
+  // Além do corte por horário, algumas datas específicas podem estar bloqueadas de propósito
+  // (ex: feriado, dia fechado) — cadastradas em `reserva_datas_bloqueadas`. Se Hoje ou Amanhã
+  // caírem numa data bloqueada, o botão correspondente nem aparece.
+  const datasBloqueadas = datasBloqueadasTexto ? parseDatasBloqueadas(datasBloqueadasTexto) : null;
+  const hojeBloqueadoPorData = !!datasBloqueadas?.has(paraISO(agora));
+  const amanhaBloqueadaPorData = !!datasBloqueadas?.has(paraISO(somarDias(agora, 1)));
+
+  const esconderHoje = hojeFechadoPorHorario || hojeBloqueadoPorData;
+  const esconderAmanha = amanhaBloqueadaPorData;
+
+  const botoes = [
+    ...(esconderHoje ? [] : [{ titulo: "Hoje", payload: RESERVA_DATA_HOJE }]),
+    ...(esconderAmanha ? [] : [{ titulo: "Amanhã", payload: RESERVA_DATA_AMANHA }]),
+    { titulo: "Outro dia", payload: RESERVA_DATA_OUTRO },
+  ];
 
   const opcoesTexto = botoes.map((b) => b.titulo).join(", ");
-  const aviso = hojeFechado ? "Nossas reservas de hoje já encerraram, mas posso te ajudar pra outro dia. " : "";
+  const aviso = hojeFechadoPorHorario
+    ? "Nossas reservas de hoje já encerraram, mas posso te ajudar pra outro dia. "
+    : "";
 
   const perguntaBase =
     mensagemPergunta?.trim() ||
@@ -212,7 +222,27 @@ async function continuarFluxo(
       }
 
       const dataEscolhida = escolha === "hoje" ? agora : somarDias(agora, 1);
-      dados.data_reserva = paraISO(dataEscolhida);
+      const dataEscolhidaISO = paraISO(dataEscolhida);
+
+      if (estaBloqueada(dataEscolhidaISO, config?.reserva_datas_bloqueadas)) {
+        await enviarMensagemDirect(
+          conta.access_token,
+          idDoCliente,
+          "Não estamos aceitando reservas nesse dia — pode escolher outra data?"
+        );
+        // Pergunta de novo, já com os botões atualizados (Hoje/Amanhã somem se também
+        // estiverem bloqueados) — assim a pessoa não bate na mesma data de novo sem querer.
+        await perguntarData(
+          conta,
+          idDoCliente,
+          config?.reserva_cutoff_horario ?? null,
+          config?.reserva_msg_pergunta_data,
+          config?.reserva_datas_bloqueadas
+        );
+        return;
+      }
+
+      dados.data_reserva = dataEscolhidaISO;
       dados.data_reserva_br = formatarDataBR(dataEscolhida);
       await atualizarEtapa(admin, conversa.id, "periodo", dados);
       await perguntarPeriodo(conta, idDoCliente, config?.reserva_msg_pergunta_periodo);
@@ -233,7 +263,18 @@ async function continuarFluxo(
         return;
       }
 
-      dados.data_reserva = paraISO(dataLivre);
+      const dataLivreISO = paraISO(dataLivre);
+
+      if (estaBloqueada(dataLivreISO, config?.reserva_datas_bloqueadas)) {
+        await enviarMensagemDirect(
+          conta.access_token,
+          idDoCliente,
+          "Não estamos aceitando reservas nesse dia — pode tentar outra data?"
+        );
+        return;
+      }
+
+      dados.data_reserva = dataLivreISO;
       dados.data_reserva_br = formatarDataBR(dataLivre);
       await atualizarEtapa(admin, conversa.id, "periodo", dados);
       await perguntarPeriodo(conta, idDoCliente, config?.reserva_msg_pergunta_periodo);
@@ -427,7 +468,7 @@ async function buscarConfig(admin: Admin, accountId: string) {
   return admin
     .from("chatbot_account_settings")
     .select(
-      "reserva_regras_texto, reserva_mensagem_limite_maximo, reserva_limite_maximo, reserva_cutoff_horario, google_sheet_id, reserva_msg_inicial, reserva_msg_pergunta_data, reserva_msg_pergunta_periodo, reserva_msg_pergunta_pessoas, reserva_msg_pergunta_whatsapp, reserva_msg_confirmada, reserva_msg_recusada"
+      "reserva_regras_texto, reserva_mensagem_limite_maximo, reserva_limite_maximo, reserva_cutoff_horario, google_sheet_id, reserva_msg_inicial, reserva_msg_pergunta_data, reserva_msg_pergunta_periodo, reserva_msg_pergunta_pessoas, reserva_msg_pergunta_whatsapp, reserva_msg_confirmada, reserva_msg_recusada, reserva_datas_bloqueadas"
     )
     .eq("account_id", accountId)
     .maybeSingle();
@@ -557,6 +598,68 @@ function parseDataLivre(texto: string, hojeSP: DataSimples): DataSimples | null 
     const hoje = new Date(Date.UTC(hojeSP.ano, hojeSP.mes - 1, hojeSP.dia));
     if (candidata < hoje) ano += 1;
   }
+
+  return { ano, mes, dia };
+}
+
+// --- Datas bloqueadas (feriados, dias fechados etc.), cadastradas por conta em texto livre ---
+
+/**
+ * Confere se uma data (formato ISO "AAAA-MM-DD") está na lista de datas bloqueadas cadastrada
+ * pela conta. `datasBloqueadasTexto` vem direto do campo de configuração (texto livre, dias
+ * separados por vírgula, aceitando intervalo com um traço entre duas datas) — ver
+ * `parseDatasBloqueadas`.
+ */
+function estaBloqueada(dataISO: string, datasBloqueadasTexto: string | null | undefined): boolean {
+  if (!datasBloqueadasTexto?.trim()) return false;
+  return parseDatasBloqueadas(datasBloqueadasTexto).has(dataISO);
+}
+
+/**
+ * Interpreta o texto cadastrado em "Bloquear datas específicas": dias separados por vírgula, no
+ * formato dia/mês/ano completo (ex: "25/12/2026, 31/12/2026"), aceitando também um intervalo
+ * fechado usando um traço entre duas datas (ex: "24/12/2026-26/12/2026" bloqueia os 3 dias).
+ * Trechos que não batem com nenhum desses formatos são ignorados, sem quebrar o resto da lista.
+ */
+function parseDatasBloqueadas(texto: string): Set<string> {
+  const resultado = new Set<string>();
+  const partes = texto.split(",").map((p) => p.trim()).filter(Boolean);
+
+  for (const parte of partes) {
+    const ladosDoIntervalo = parte.split("-").map((p) => p.trim()).filter(Boolean);
+
+    if (ladosDoIntervalo.length === 2) {
+      const inicio = parseDataBRCompleta(ladosDoIntervalo[0]);
+      const fim = parseDataBRCompleta(ladosDoIntervalo[1]);
+      if (inicio && fim) {
+        let cursor = inicio;
+        let seguranca = 0;
+        while (seguranca < 366) {
+          resultado.add(paraISO(cursor));
+          if (paraISO(cursor) === paraISO(fim)) break;
+          cursor = somarDias(cursor, 1);
+          seguranca++;
+        }
+        continue;
+      }
+    }
+
+    const unica = parseDataBRCompleta(parte);
+    if (unica) resultado.add(paraISO(unica));
+  }
+
+  return resultado;
+}
+
+/** Data no formato dia/mês/ano COMPLETO (ano com 4 dígitos sempre obrigatório). */
+function parseDataBRCompleta(texto: string): DataSimples | null {
+  const match = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+
+  const dia = parseInt(match[1], 10);
+  const mes = parseInt(match[2], 10);
+  const ano = parseInt(match[3], 10);
+  if (dia < 1 || dia > 31 || mes < 1 || mes > 12) return null;
 
   return { ano, mes, dia };
 }
