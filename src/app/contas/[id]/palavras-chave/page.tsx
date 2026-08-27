@@ -30,7 +30,7 @@ export default async function PalavrasChavePage({
 
   const { data: palavrasChave } = await admin
     .from("chatbot_keywords")
-    .select("id, variacoes, mensagens, ativa, created_at")
+    .select("id, palavra_chave, mensagens, pausa_entre_mensagens_ms, ativo, created_at")
     .eq("account_id", conta.id)
     .order("created_at", { ascending: true });
 
@@ -55,15 +55,18 @@ export default async function PalavrasChavePage({
             className="rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3"
           >
             <div className="flex items-center justify-between">
-              <div className="text-sm font-medium">
-                {((pc.variacoes as string[]) ?? []).join(", ")}
-              </div>
+              <div className="text-sm font-medium">{pc.palavra_chave}</div>
               <form action={`/api/keywords/${pc.id}/excluir`} method="POST">
                 <button type="submit" className="text-xs text-red-400 hover:text-red-300">
                   Excluir
                 </button>
               </form>
             </div>
+            {pc.pausa_entre_mensagens_ms ? (
+              <p className="mt-1 text-xs text-neutral-500">
+                Pausa entre mensagens: {pc.pausa_entre_mensagens_ms}ms
+              </p>
+            ) : null}
             <ol className="mt-2 flex flex-col gap-1 text-xs text-neutral-400">
               {((pc.mensagens as string[]) ?? []).map((m, i) => (
                 <li key={i}>
@@ -93,7 +96,7 @@ export default async function PalavrasChavePage({
           </label>
           <input
             type="text"
-            name="variacoes"
+            name="palavra_chave"
             required
             className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
           />
@@ -114,6 +117,20 @@ export default async function PalavrasChavePage({
               />
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-neutral-400">
+            Pausa entre as mensagens, em milissegundos (opcional — deixa em branco pra mandar tudo
+            de uma vez, sem pausa)
+          </label>
+          <input
+            type="number"
+            name="pausa_entre_mensagens_ms"
+            min={0}
+            placeholder="0"
+            className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+          />
         </div>
 
         <button
