@@ -65,13 +65,14 @@ export default async function ContasPage({
         {(contas ?? []).map((conta) => (
           <div
             key={conta.id}
-            className="rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3"
+            className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3"
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium">{conta.page_name}</div>
-                <div className="text-xs text-neutral-400">@{conta.instagram_username}</div>
-              </div>
+            <div>
+              <div className="text-sm font-medium">{conta.page_name}</div>
+              <div className="text-xs text-neutral-400">@{conta.instagram_username}</div>
+            </div>
+
+            <div className="flex items-center gap-3">
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                   conta.active
@@ -81,13 +82,14 @@ export default async function ContasPage({
               >
                 {conta.active ? "Ativa" : "Pausada"}
               </span>
+
+              <a
+                href={`/contas/${conta.id}/palavras-chave`}
+                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800"
+              >
+                Configurar atendimento
+              </a>
             </div>
-            <a
-              href={`/contas/${conta.id}/palavras-chave`}
-              className="mt-2 inline-block text-xs text-neutral-400 underline hover:text-neutral-300"
-            >
-              Palavras-chave
-            </a>
           </div>
         ))}
 
