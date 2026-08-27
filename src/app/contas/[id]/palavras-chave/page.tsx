@@ -4,8 +4,10 @@ export const dynamic = "force-dynamic";
 
 export default async function PalavrasChavePage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { erro?: string };
 }) {
   const admin = criarClienteAdmin();
 
@@ -39,6 +41,12 @@ export default async function PalavrasChavePage({
       </a>
       <h1 className="mt-2 text-xl font-semibold">Palavras-chave — {conta.page_name}</h1>
       <p className="mt-1 text-sm text-neutral-400">@{conta.instagram_username}</p>
+
+      {searchParams.erro && (
+        <div className="mt-4 rounded-lg border border-red-900 bg-red-950 px-4 py-2 text-sm text-red-300">
+          {searchParams.erro}
+        </div>
+      )}
 
       <div className="mt-6 flex flex-col gap-3">
         {(palavrasChave ?? []).map((pc) => (
