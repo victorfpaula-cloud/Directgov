@@ -6,13 +6,6 @@ import {
 } from "@/lib/metaMessaging";
 import { adicionarLinhaNaPlanilha } from "@/lib/googleSheets";
 
-// Etapa 6 — fluxo de reserva com estado: a conta responde normal (palavra-chave, Gemini) até
-// alguém escrever a palavra-chave configurada em `palavra_chave_reserva`. Daí em diante, cada
-// mensagem nova dessa pessoa é tratada como resposta da pergunta atual (nunca cai em
-// palavra-chave/Gemini até o fluxo terminar) — o estado de "em que pergunta a pessoa está" fica
-// guardado em `chatbot_conversations`, e a reserva confirmada vira uma linha em
-// `chatbot_reservations` + uma linha na planilha do Google.
-
 type Admin = ReturnType<typeof criarClienteAdmin>;
 type Conta = { id: string; access_token: string };
 
@@ -24,11 +17,6 @@ const RESERVA_PERIODO_JANTAR = "RESERVA_PERIODO_JANTAR";
 const RESERVA_CONFIRMAR_SIM = "RESERVA_CONFIRMAR_SIM";
 const RESERVA_CONFIRMAR_NAO = "RESERVA_CONFIRMAR_NAO";
 
-/**
- * Ponto de entrada, chamado pelo webhook ANTES da checagem de palavra-chave comum. Devolve
- * `true` quando tratou a mensagem (o webhook para por ali), `false` quando não tem nada a ver
- * com reserva (o webhook segue pro caminho normal de palavra-chave/Gemini).
- */
 export async function processarMensagemDeReserva(
   admin: Admin,
   conta: Conta,
@@ -64,8 +52,6 @@ export async function processarMensagemDeReserva(
   if (erroAoBuscarConversa) throw erroAoBuscarConversa;
 
   if (bateuPalavraChave) {
-    // Bateu a palavra-chave — começa (ou recomeça do zero, se já tinha uma reserva pela metade;
-    // ex: a pessoa desistiu e quer começar de novo).
     if (conversa) {
       await admin.from("chatbot_conversations").delete().eq("id", conversa.id);
     }
@@ -314,8 +300,6 @@ async function continuarFluxo(
     }
 
     default: {
-      // Etapa desconhecida (não deveria acontecer) — encerra o fluxo pra não travar a conversa
-      // num estado sem saída.
       await encerrarConversa(admin, conversa.id);
       return;
     }
@@ -352,9 +336,6 @@ async function finalizarReserva(admin: Admin, conta: Conta, idDoCliente: string,
     return;
   }
 
-  // Avisa o cliente ANTES de tentar escrever na planilha — a reserva já está garantida no banco
-  // nesse ponto, então uma falha na planilha (rede, permissão) não pode virar um "não deu certo"
-  // falso pro cliente.
   await enviarMensagemDirect(
     conta.access_token,
     idDoCliente,
@@ -405,8 +386,6 @@ async function encerrarConversa(admin: Admin, conversaId: string) {
   await admin.from("chatbot_conversations").delete().eq("id", conversaId);
 }
 
-// --- Interpretação de respostas (aceita clique no botão OU texto digitado, sempre) ---
-
 function interpretarData(
   payload: string | undefined,
   texto: string | undefined,
@@ -452,8 +431,6 @@ function interpretarSimNao(payload: string | undefined, texto: string | undefine
   if (/^(nao|n|cancela|cancelar)\b/.test(t)) return false;
   return null;
 }
-
-// --- Data/hora em São Paulo, sem depender de biblioteca externa ---
 
 type DataSimples = { ano: number; mes: number; dia: number };
 
@@ -533,5 +510,5 @@ function normalizar(texto: string): string {
   return texto
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
+    .replace(/\p{Diacritic}/gu, "");
 }
