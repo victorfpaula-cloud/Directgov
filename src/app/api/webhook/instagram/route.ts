@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { assinaturaValida, enviarMensagemDirect } from "@/lib/metaMessaging";
+import { gerarRespostaComGemini } from "@/lib/gemini";
 
-// Endpoint único que a Meta chama pra: (1) validar o webhook na hora de configurar (GET) e
-// (2) empurrar cada mensagem nova de Direct em tempo real (POST). Rota separada de qualquer
-// coisa do agendador — nenhum código aqui toca no motor de publicação de Stories.
-
-// ============================================================================
-// GET — handshake de verificação da Meta.
-// ============================================================================
 export async function GET(request: NextRequest) {
   const modo = request.nextUrl.searchParams.get("hub.mode");
   const tokenRecebido = request.nextUrl.searchParams.get("hub.verify_token");
@@ -23,9 +17,6 @@ export async function GET(request: NextRequest) {
   return new NextResponse("Verificação falhou.", { status: 403 });
 }
 
-// ============================================================================
-// POST — evento de mensagem chegando de verdade.
-// ============================================================================
 export async function POST(request: NextRequest) {
   const corpoBruto = await request.text();
   const assinatura = request.headers.get("x-hub-signature-256");
@@ -63,8 +54,6 @@ export async function POST(request: NextRequest) {
 async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAdmin>, evento: any) {
   const mensagem = evento?.message;
 
-  // Ignora eco (mensagens que o próprio app/Página mandou, que a Meta manda de volta pro
-  // webhook) — sem essa checagem o sistema entraria em loop respondendo a si mesmo.
   if (!mensagem || mensagem.is_echo) {
     return;
   }
@@ -78,7 +67,6 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return;
   }
 
-  // Idempotência: a Meta pode reenviar o mesmo evento em caso de timeout/retry.
   const { error: erroAoRegistrar } = await admin
     .from("chatbot_processed_messages")
     .insert({ message_id: idDaMensagem });
@@ -104,13 +92,10 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return;
   }
 
-  // Por enquanto só tratamos mensagem de texto simples — áudio, imagem, resposta a story, etc.
-  // ainda não têm resposta automática (ver plano do projeto).
   if (!textoDaMensagem) {
     return;
   }
 
-  // Etapa 4: procura uma palavra-chave ativa dessa conta que bata com o texto recebido.
   const { data: palavrasChave, error: erroAoBuscarPalavrasChave } = await admin
     .from("chatbot_keywords")
     .select("palavra_chave, mensagens, pausa_entre_mensagens_ms")
@@ -131,29 +116,65 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return variacoes.some((variacao: string) => textoNormalizado.includes(variacao));
   });
 
-  if (!palavraChaveCorrespondente) {
-    // Nenhuma palavra-chave bateu — decisão do Victor (27/08/2026): fica em silêncio por
-    // enquanto, até o fallback do Gemini (Etapa 5) entrar.
+  if (palavraChaveCorrespondente) {
+    const mensagensDaSequencia: string[] = Array.isArray(palavraChaveCorrespondente.mensagens)
+      ? palavraChaveCorrespondente.mensagens
+      : [];
+    const pausaMs = Math.min(palavraChaveCorrespondente.pausa_entre_mensagens_ms ?? 0, 4000);
+
+    for (let i = 0; i < mensagensDaSequencia.length; i++) {
+      if (i > 0 && pausaMs > 0) {
+        await aguardar(pausaMs);
+      }
+      await enviarMensagemDirect(conta.access_token, idDoCliente, mensagensDaSequencia[i]);
+    }
     return;
   }
 
-  const mensagensDaSequencia: string[] = Array.isArray(palavraChaveCorrespondente.mensagens)
-    ? palavraChaveCorrespondente.mensagens
-    : [];
-
-  // Limita a pausa a 4s por mensagem — protege contra a função ficar rodando tempo demais
-  // (a Vercel tem um limite de duração por execução).
-  const pausaMs = Math.min(palavraChaveCorrespondente.pausa_entre_mensagens_ms ?? 0, 4000);
-
-  for (let i = 0; i < mensagensDaSequencia.length; i++) {
-    if (i > 0 && pausaMs > 0) {
-      await aguardar(pausaMs);
-    }
-    await enviarMensagemDirect(conta.access_token, idDoCliente, mensagensDaSequencia[i]);
-  }
+  // Nenhuma palavra-chave bateu — Etapa 5: cai no fallback do Gemini.
+  await responderComGemini(admin, conta, idDoCliente, textoDaMensagem);
 }
 
-// Remove acentos e deixa minúsculo, pra "preço" bater com "preco" e "PREÇO" igual.
+async function responderComGemini(
+  admin: ReturnType<typeof criarClienteAdmin>,
+  conta: { id: string; access_token: string },
+  idDoCliente: string,
+  textoDaMensagem: string
+) {
+  const { data: config, error: erroAoBuscarConfig } = await admin
+    .from("chatbot_account_settings")
+    .select("tom_de_voz, guardrails, base_conhecimento")
+    .eq("account_id", conta.id)
+    .maybeSingle();
+
+  if (erroAoBuscarConfig) throw erroAoBuscarConfig;
+
+  if (!config) {
+    // Conta ainda sem configuração de Gemini cadastrada — fica em silêncio.
+    return;
+  }
+
+  const promptDoSistema = [
+    config.tom_de_voz ? `Tom de voz a seguir:\n${config.tom_de_voz}` : null,
+    config.guardrails ? `Regras que você DEVE seguir sempre:\n${config.guardrails}` : null,
+    config.base_conhecimento ? `Informações sobre o negócio:\n${config.base_conhecimento}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (!promptDoSistema) {
+    return;
+  }
+
+  const respostaGerada = await gerarRespostaComGemini(promptDoSistema, textoDaMensagem);
+
+  if (!respostaGerada) {
+    return;
+  }
+
+  await enviarMensagemDirect(conta.access_token, idDoCliente, respostaGerada);
+}
+
 function normalizar(texto: string): string {
   return texto
     .toLowerCase()
