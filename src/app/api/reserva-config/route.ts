@@ -19,6 +19,14 @@ export async function POST(request: NextRequest) {
   const reservaPausaMensagem = formData.get("reserva_pausa_mensagem")?.toString() ?? "";
   const googleSheetId = formData.get("google_sheet_id")?.toString() ?? "";
 
+  const reservaMsgInicial = formData.get("reserva_msg_inicial")?.toString() ?? "";
+  const reservaMsgPerguntaData = formData.get("reserva_msg_pergunta_data")?.toString() ?? "";
+  const reservaMsgPerguntaPeriodo = formData.get("reserva_msg_pergunta_periodo")?.toString() ?? "";
+  const reservaMsgPerguntaPessoas = formData.get("reserva_msg_pergunta_pessoas")?.toString() ?? "";
+  const reservaMsgPerguntaWhatsapp = formData.get("reserva_msg_pergunta_whatsapp")?.toString() ?? "";
+  const reservaMsgConfirmada = formData.get("reserva_msg_confirmada")?.toString() ?? "";
+  const reservaMsgRecusada = formData.get("reserva_msg_recusada")?.toString() ?? "";
+
   const limiteNormalBruto = formData.get("reserva_limite_normal")?.toString().trim();
   const limiteMaximoBruto = formData.get("reserva_limite_maximo")?.toString().trim();
 
@@ -41,6 +49,13 @@ export async function POST(request: NextRequest) {
       reserva_pausa_data: reservaPausaData || null,
       reserva_pausa_mensagem: reservaPausaMensagem || null,
       google_sheet_id: googleSheetId || null,
+      reserva_msg_inicial: reservaMsgInicial || null,
+      reserva_msg_pergunta_data: reservaMsgPerguntaData || null,
+      reserva_msg_pergunta_periodo: reservaMsgPerguntaPeriodo || null,
+      reserva_msg_pergunta_pessoas: reservaMsgPerguntaPessoas || null,
+      reserva_msg_pergunta_whatsapp: reservaMsgPerguntaWhatsapp || null,
+      reserva_msg_confirmada: reservaMsgConfirmada || null,
+      reserva_msg_recusada: reservaMsgRecusada || null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "account_id" }
