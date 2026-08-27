@@ -41,6 +41,12 @@ export default async function ContaLayout({
             >
               Gemini
             </a>
+            <a
+              href={`/contas/${conta.id}/reserva`}
+              className="rounded-lg px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-900"
+            >
+              Reserva
+            </a>
           </nav>
 
           <div className="mt-6">{children}</div>
