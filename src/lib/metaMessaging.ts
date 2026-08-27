@@ -60,11 +60,17 @@ export async function enviarMensagemDirect(
 }
 
 /**
- * Envia uma mensagem com botões de resposta rápida (quick replies) — usado no fluxo de reserva
- * (Etapa 6) pra oferecer opções tocáveis (Hoje/Amanhã/Outro dia, Almoço/Jantar, Sim/Não). Sempre
- * inclui as opções por extenso no próprio texto também, porque os botões só aparecem no app do
- * Instagram (celular) — quem usa o Instagram pelo navegador recebe só o texto, sem botão nenhum,
- * então o texto sozinho precisa dar pra responder digitando.
+ * Envia uma mensagem com botões de verdade (Button Template) — usado no fluxo de reserva
+ * (Etapa 6) pra oferecer opções tocáveis (Hoje/Amanhã/Outro dia, Almoço/Jantar, Sim/Não). Esse é
+ * o mesmo tipo de botão que aparece na captura de tela que o Victor mandou (o bot antigo do
+ * SendPulse usava isso): o botão fica DENTRO da mensagem, junto com o texto, e continua visível
+ * no histórico depois de tocado — diferente do formato anterior (quick replies), que aparecia só
+ * como uma barrinha temporária em cima do teclado e sumia depois de usada.
+ *
+ * Limites da Meta pra esse formato: até 3 botões por mensagem, título de cada botão com até 20
+ * caracteres, texto da mensagem com até ~640 caracteres — por isso o texto que chega aqui deve
+ * ser sempre curto (a regra é: textos longos, tipo as Regras cadastradas, vão em mensagens de
+ * texto simples separadas, nunca dentro de uma mensagem com botão).
  */
 export async function enviarMensagemComBotoes(
   tokenDaConta: string,
@@ -82,12 +88,18 @@ export async function enviarMensagemComBotoes(
       body: JSON.stringify({
         recipient: { id: igsidDoCliente },
         message: {
-          text: texto,
-          quick_replies: botoes.map((botao) => ({
-            content_type: "text",
-            title: botao.titulo,
-            payload: botao.payload,
-          })),
+          attachment: {
+            type: "template",
+            payload: {
+              template_type: "button",
+              text: texto,
+              buttons: botoes.map((botao) => ({
+                type: "postback",
+                title: botao.titulo,
+                payload: botao.payload,
+              })),
+            },
+          },
         },
       }),
       cache: "no-store",
