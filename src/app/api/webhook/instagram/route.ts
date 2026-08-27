@@ -7,8 +7,7 @@ import { assinaturaValida, enviarMensagemDirect } from "@/lib/metaMessaging";
 // coisa do agendador — nenhum código aqui toca no motor de publicação de Stories.
 
 // ============================================================================
-// GET — handshake de verificação da Meta (roda uma vez, quando a Callback URL é configurada
-// no painel do app, e sempre que a Meta decide reconfirmar o webhook).
+// GET — handshake de verificação da Meta.
 // ============================================================================
 export async function GET(request: NextRequest) {
   const modo = request.nextUrl.searchParams.get("hub.mode");
@@ -18,7 +17,6 @@ export async function GET(request: NextRequest) {
   const tokenEsperado = process.env.META_WEBHOOK_VERIFY_TOKEN;
 
   if (modo === "subscribe" && tokenEsperado && tokenRecebido === tokenEsperado && challenge) {
-    // A Meta espera o valor de hub.challenge de volta, em texto puro, sem aspas nem JSON.
     return new NextResponse(challenge, { status: 200 });
   }
 
@@ -32,10 +30,6 @@ export async function POST(request: NextRequest) {
   const corpoBruto = await request.text();
   const assinatura = request.headers.get("x-hub-signature-256");
 
-  // Confirma que a chamada realmente veio da Meta (calculado em cima do App Secret certo, do
-  // app Chatbot Direct — 1458016982775252). Resolvido em 27/08/2026: o mistério não era o App
-  // Secret, era a entrega em si (faltava a assinatura de webhook no nível do aplicativo pro
-  // objeto "instagram", separada da inscrição por Página).
   if (!assinaturaValida(corpoBruto, assinatura)) {
     return new NextResponse("Assinatura inválida.", { status: 403 });
   }
@@ -44,8 +38,6 @@ export async function POST(request: NextRequest) {
   try {
     payload = JSON.parse(corpoBruto);
   } catch {
-    // Corpo não é um JSON válido — não há o que processar, mas ainda respondemos 200 pra
-    // Meta não ficar retentando um payload que nunca vai parsear.
     return NextResponse.json({ ok: true });
   }
 
@@ -60,15 +52,11 @@ export async function POST(request: NextRequest) {
       try {
         await processarEventoDeMensagem(admin, evento);
       } catch (erro) {
-        // Um erro processando UM evento não pode derrubar os outros nem fazer a Meta reenviar
-        // o lote inteiro — só loga (aparece nos logs da Vercel) e segue pro próximo.
         console.error("Erro processando evento de mensagem do Direct:", erro);
       }
     }
   }
 
-  // A Meta espera uma resposta 200 rápida — já processamos tudo de forma síncrona acima
-  // (volume baixo, ~30 mensagens/dia no total, sem necessidade de fila separada por enquanto).
   return NextResponse.json({ ok: true });
 }
 
@@ -84,24 +72,22 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
   const idDaMensagem: string | undefined = mensagem.mid;
   const idDoCliente: string | undefined = evento?.sender?.id;
   const idDaContaRecebendo: string | undefined = evento?.recipient?.id;
+  const textoDaMensagem: string | undefined = mensagem.text;
 
   if (!idDaMensagem || !idDoCliente || !idDaContaRecebendo) {
     return;
   }
 
-  // Idempotência: a Meta pode reenviar o mesmo evento em caso de timeout/retry. Tenta inserir
-  // primeiro — se já existe (violação da chave primária), já foi processada, então para aqui.
+  // Idempotência: a Meta pode reenviar o mesmo evento em caso de timeout/retry.
   const { error: erroAoRegistrar } = await admin
     .from("chatbot_processed_messages")
     .insert({ message_id: idDaMensagem });
 
   if (erroAoRegistrar) {
-    // Código 23505 = unique/primary key violation no Postgres → mensagem repetida, ignora.
     if ((erroAoRegistrar as any).code === "23505") return;
     throw erroAoRegistrar;
   }
 
-  // Encontra qual conta nossa (chatbot_accounts) é essa.
   const { data: conta, error: erroAoBuscarConta } = await admin
     .from("chatbot_accounts")
     .select("id, access_token")
@@ -118,12 +104,63 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return;
   }
 
-  // Resposta fixa de teste (Etapa 2) — só pra provar que o caminho completo funciona rápido e
-  // direito. As etapas seguintes substituem isso pelo atendimento de verdade (Gemini, palavras-
-  // chave, fluxo de reserva).
-  await enviarMensagemDirect(
-    conta.access_token,
-    idDoCliente,
-    "Recebi sua mensagem! 👋 (esse é um teste — o atendimento completo entra no ar em breve)"
-  );
+  // Por enquanto só tratamos mensagem de texto simples — áudio, imagem, resposta a story, etc.
+  // ainda não têm resposta automática (ver plano do projeto).
+  if (!textoDaMensagem) {
+    return;
+  }
+
+  // Etapa 4: procura uma palavra-chave ativa dessa conta que bata com o texto recebido.
+  const { data: palavrasChave, error: erroAoBuscarPalavrasChave } = await admin
+    .from("chatbot_keywords")
+    .select("palavra_chave, mensagens, pausa_entre_mensagens_ms")
+    .eq("account_id", conta.id)
+    .eq("ativo", true)
+    .order("created_at", { ascending: true });
+
+  if (erroAoBuscarPalavrasChave) throw erroAoBuscarPalavrasChave;
+
+  const textoNormalizado = normalizar(textoDaMensagem);
+
+  const palavraChaveCorrespondente = (palavrasChave ?? []).find((pc) => {
+    const variacoes = (pc.palavra_chave ?? "")
+      .split(",")
+      .map((v: string) => normalizar(v.trim()))
+      .filter((v: string) => v.length > 0);
+
+    return variacoes.some((variacao: string) => textoNormalizado.includes(variacao));
+  });
+
+  if (!palavraChaveCorrespondente) {
+    // Nenhuma palavra-chave bateu — decisão do Victor (27/08/2026): fica em silêncio por
+    // enquanto, até o fallback do Gemini (Etapa 5) entrar.
+    return;
+  }
+
+  const mensagensDaSequencia: string[] = Array.isArray(palavraChaveCorrespondente.mensagens)
+    ? palavraChaveCorrespondente.mensagens
+    : [];
+
+  // Limita a pausa a 4s por mensagem — protege contra a função ficar rodando tempo demais
+  // (a Vercel tem um limite de duração por execução).
+  const pausaMs = Math.min(palavraChaveCorrespondente.pausa_entre_mensagens_ms ?? 0, 4000);
+
+  for (let i = 0; i < mensagensDaSequencia.length; i++) {
+    if (i > 0 && pausaMs > 0) {
+      await aguardar(pausaMs);
+    }
+    await enviarMensagemDirect(conta.access_token, idDoCliente, mensagensDaSequencia[i]);
+  }
+}
+
+// Remove acentos e deixa minúsculo, pra "preço" bater com "preco" e "PREÇO" igual.
+function normalizar(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function aguardar(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
