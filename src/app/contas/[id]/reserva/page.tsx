@@ -14,8 +14,7 @@ export default async function ReservaConfigPage({
   const { data: config } = await admin
     .from("chatbot_account_settings")
     .select(
-      "palavra_chave_reserva, reserva_regras_texto, reserva_limite_normal, reserva_limite_maximo, reserva_mensagem_limite_maximo, reserva_cutoff_horario, reserva_pausa_ativa, reserva_pausa_data, reserva_pausa_mensagem, google_sheet_id, " +
-        "reserva_msg_inicial, reserva_msg_pergunta_data, reserva_msg_pergunta_periodo, reserva_msg_pergunta_pessoas, reserva_msg_pergunta_whatsapp, reserva_msg_confirmada, reserva_msg_recusada"
+      "palavra_chave_reserva, reserva_regras_texto, reserva_limite_normal, reserva_limite_maximo, reserva_mensagem_limite_maximo, reserva_cutoff_horario, reserva_pausa_ativa, reserva_pausa_data, reserva_pausa_mensagem, google_sheet_id, reserva_msg_inicial, reserva_msg_pergunta_data, reserva_msg_pergunta_periodo, reserva_msg_pergunta_pessoas, reserva_msg_pergunta_whatsapp, reserva_msg_confirmada, reserva_msg_recusada"
     )
     .eq("account_id", params.id)
     .maybeSingle();
