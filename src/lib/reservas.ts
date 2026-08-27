@@ -257,18 +257,19 @@ async function continuarFluxo(
       const regras = config?.reserva_regras_texto?.trim();
       const periodoTexto = dados.periodo === "almoco" ? "almoço" : "jantar";
 
-      const textoConfirmacao = [
-        regras,
-        `Confirmando: ${dados.quantidade_pessoas} pessoa(s), dia ${dados.data_reserva_br}, ${periodoTexto}.`,
-        "Posso confirmar?",
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      if (regras) {
+        await enviarMensagemDirect(conta.access_token, idDoCliente, regras);
+      }
 
-      await enviarMensagemComBotoes(conta.access_token, idDoCliente, textoConfirmacao, [
-        { titulo: "Sim, confirmar", payload: RESERVA_CONFIRMAR_SIM },
-        { titulo: "Não, fica pra próxima", payload: RESERVA_CONFIRMAR_NAO },
-      ]);
+      await enviarMensagemComBotoes(
+        conta.access_token,
+        idDoCliente,
+        `Confirmando: ${dados.quantidade_pessoas} pessoa(s), dia ${dados.data_reserva_br}, ${periodoTexto}. Posso confirmar?`,
+        [
+          { titulo: "Sim, confirmar", payload: RESERVA_CONFIRMAR_SIM },
+          { titulo: "Não, cancelar", payload: RESERVA_CONFIRMAR_NAO },
+        ]
+      );
       return;
     }
 
