@@ -32,17 +32,12 @@ export async function POST(request: NextRequest) {
   const corpoBruto = await request.text();
   const assinatura = request.headers.get("x-hub-signature-256");
 
-  // ⚠️ TEMPORÁRIO (desde 26/08/2026 à noite) — a checagem de assinatura está DESLIGADA só pra
-  // conseguir testar o resto do caminho (recebimento + resposta) enquanto investigamos por que
-  // ela nunca bate (ver [webhook diagnóstico] nos logs — suspeita: o payload chega como
-  // "object":"instagram" em vez de "object":"page", pode ser um caminho de assinatura diferente).
-  // ISSO PRECISA VOLTAR A SER LIGADO antes de qualquer etapa nova (Gemini, planilha) — sem essa
-  // checagem, qualquer pessoa que descobrir essa URL consegue chamar ela fingindo ser a Meta.
-  const assinaturaOk = assinaturaValida(corpoBruto, assinatura);
-  if (!assinaturaOk) {
-    console.warn(
-      "[webhook TEMPORÁRIO] Assinatura não bateu, mas seguindo mesmo assim (checagem desligada temporariamente)."
-    );
+  // Confirma que a chamada realmente veio da Meta (calculado em cima do App Secret certo, do
+  // app Chatbot Direct — 1458016982775252). Resolvido em 27/08/2026: o mistério não era o App
+  // Secret, era a entrega em si (faltava a assinatura de webhook no nível do aplicativo pro
+  // objeto "instagram", separada da inscrição por Página).
+  if (!assinaturaValida(corpoBruto, assinatura)) {
+    return new NextResponse("Assinatura inválida.", { status: 403 });
   }
 
   let payload: any;
@@ -80,19 +75,9 @@ export async function POST(request: NextRequest) {
 async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAdmin>, evento: any) {
   const mensagem = evento?.message;
 
-  // Log temporário de diagnóstico (26/08/2026 à noite) — pra ver exatamente o que cada evento
-  // contém, já que nem o aviso de "conta não encontrada" nem o de erro ao enviar estavam
-  // aparecendo (sinal de que a função estava parando antes disso, silenciosamente). Remover
-  // depois de resolver.
-  console.log("[webhook TEMPORÁRIO] Evento recebido:", JSON.stringify(evento));
-
   // Ignora eco (mensagens que o próprio app/Página mandou, que a Meta manda de volta pro
   // webhook) — sem essa checagem o sistema entraria em loop respondendo a si mesmo.
   if (!mensagem || mensagem.is_echo) {
-    console.log("[webhook TEMPORÁRIO] Ignorado: sem 'message' no evento, ou é eco.", {
-      temMensagem: Boolean(mensagem),
-      ehEco: mensagem?.is_echo ?? null,
-    });
     return;
   }
 
@@ -101,11 +86,6 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
   const idDaContaRecebendo: string | undefined = evento?.recipient?.id;
 
   if (!idDaMensagem || !idDoCliente || !idDaContaRecebendo) {
-    console.log("[webhook TEMPORÁRIO] Ignorado: faltou id da mensagem, do cliente ou da conta.", {
-      idDaMensagem,
-      idDoCliente,
-      idDaContaRecebendo,
-    });
     return;
   }
 
@@ -121,8 +101,7 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     throw erroAoRegistrar;
   }
 
-  // Encontra qual conta nossa (chatbot_accounts) é essa — ainda não tem nenhuma conectada
-  // nessa etapa, então isso vai vir vazio até a gente conectar a primeira conta de teste.
+  // Encontra qual conta nossa (chatbot_accounts) é essa.
   const { data: conta, error: erroAoBuscarConta } = await admin
     .from("chatbot_accounts")
     .select("id, access_token")
