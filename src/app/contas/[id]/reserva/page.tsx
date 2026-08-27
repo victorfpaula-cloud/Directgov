@@ -1,4 +1,5 @@
 import { criarClienteAdmin } from "@/lib/supabase/admin";
+import DatasBloqueadasEditor from "./DatasBloqueadasEditor";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -301,18 +302,12 @@ export default async function ReservaConfigPage({
             reservar pra esses dias específicos (nem clicando em "Hoje"/"Amanhã" quando bater
             numa dessas datas, nem digitando a data na mão).
           </p>
-          <p className="mt-2 text-xs text-neutral-500">
-            Escreva as datas separadas por vírgula, sempre no formato dia/mês/ano completo. Pra
-            bloquear vários dias seguidos de uma vez, escreve a primeira e a última separadas por
-            um traço.
-          </p>
-          <textarea
-            name="reserva_datas_bloqueadas"
-            rows={2}
-            defaultValue={config?.reserva_datas_bloqueadas ?? ""}
-            placeholder="Ex: 25/12/2026, 24/12/2026-26/12/2026, 01/01/2027"
-            className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-          />
+          <div className="mt-3">
+            <DatasBloqueadasEditor
+              nome="reserva_datas_bloqueadas"
+              valorInicial={config?.reserva_datas_bloqueadas ?? ""}
+            />
+          </div>
         </div>
 
         <button
