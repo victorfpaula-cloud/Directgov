@@ -4,13 +4,14 @@ import { criarClienteAdmin } from "@/lib/supabase/admin";
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const accountId = formData.get("account_id")?.toString();
-  const variacoesTexto = formData.get("variacoes")?.toString() ?? "";
+  const palavraChave = formData.get("palavra_chave")?.toString().trim() ?? "";
+  const pausaTexto = formData.get("pausa_entre_mensagens_ms")?.toString().trim();
 
   if (!accountId) {
     return NextResponse.redirect(new URL(`/contas`, request.url));
   }
 
-  if (!variacoesTexto.trim()) {
+  if (!palavraChave) {
     return NextResponse.redirect(
       new URL(
         `/contas/${accountId}/palavras-chave?erro=${encodeURIComponent(
@@ -21,27 +22,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const variacoes = variacoesTexto
-    .split(",")
-    .map((v) => v.trim())
-    .filter((v) => v.length > 0);
-
   const mensagens: string[] = [];
   for (let i = 1; i <= 5; i++) {
     const texto = formData.get(`mensagem_${i}`)?.toString().trim();
     if (texto) mensagens.push(texto);
   }
 
+  const pausaEntreMensagensMs = pausaTexto ? Number(pausaTexto) : 0;
+
   const admin = criarClienteAdmin();
   const { error } = await admin.from("chatbot_keywords").insert({
     account_id: accountId,
-    variacoes,
+    palavra_chave: palavraChave,
     mensagens,
+    pausa_entre_mensagens_ms: Number.isFinite(pausaEntreMensagensMs) ? pausaEntreMensagensMs : 0,
+    ativo: true,
   });
 
   if (error) {
-    // Captura o motivo de verdade, em vez da tela só "sumir" sem explicar nada (achado em
-    // 27/08/2026 — a primeira versão não checava esse erro).
     console.error("Falha ao salvar palavra-chave:", error);
     return NextResponse.redirect(
       new URL(
