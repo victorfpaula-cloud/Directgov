@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { assinaturaValida, enviarMensagemDirect } from "@/lib/metaMessaging";
 import { gerarRespostaComGemini } from "@/lib/gemini";
+import { processarMensagemDeReserva } from "@/lib/reservas";
 
 export async function GET(request: NextRequest) {
   const modo = request.nextUrl.searchParams.get("hub.mode");
@@ -92,6 +93,12 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return;
   }
 
+  // Etapa 6 — fluxo de reserva: checa ANTES de palavra-chave/Gemini, porque enquanto alguém está
+  // no meio de uma reserva, toda mensagem nova dessa pessoa precisa ser tratada como resposta da
+  // pergunta atual — nunca cair no atendimento normal por engano.
+  const tratadoPeloFluxoDeReserva = await processarMensagemDeReserva(admin, conta, idDoCliente, mensagem);
+  if (tratadoPeloFluxoDeReserva) return;
+
   if (!textoDaMensagem) {
     return;
   }
@@ -131,7 +138,6 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return;
   }
 
-  // Nenhuma palavra-chave bateu — Etapa 5: cai no fallback do Gemini.
   await responderComGemini(admin, conta, idDoCliente, textoDaMensagem);
 }
 
@@ -150,7 +156,6 @@ async function responderComGemini(
   if (erroAoBuscarConfig) throw erroAoBuscarConfig;
 
   if (!config) {
-    // Conta ainda sem configuração de Gemini cadastrada — fica em silêncio.
     return;
   }
 
@@ -179,7 +184,7 @@ function normalizar(texto: string): string {
   return texto
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/\p{Diacritic}/gu, "");
 }
 
 function aguardar(ms: number): Promise<void> {
