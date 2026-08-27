@@ -3,6 +3,7 @@ import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { assinaturaValida, enviarMensagemDirect } from "@/lib/metaMessaging";
 import { gerarRespostaComGemini } from "@/lib/gemini";
 import { processarMensagemDeReserva } from "@/lib/reservas";
+import { registrarAtendimento } from "@/lib/atendimentos";
 
 export async function GET(request: NextRequest) {
   const modo = request.nextUrl.searchParams.get("hub.mode");
@@ -108,55 +109,97 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return;
   }
 
-  // Etapa 6 — fluxo de reserva: checa ANTES de palavra-chave/Gemini, porque enquanto alguém está
-  // no meio de uma reserva (respondendo data/período/pessoas/WhatsApp/confirmação), toda mensagem
-  // nova dessa pessoa precisa ser tratada como resposta da pergunta atual — nunca cair no
-  // atendimento normal por engano. Se `processarMensagemDeReserva` devolver `true`, já cuidou de
-  // tudo (mandou a próxima pergunta, ou terminou o fluxo) e paramos por aqui.
-  const tratadoPeloFluxoDeReserva = await processarMensagemDeReserva(admin, conta, idDoCliente, mensagem);
-  if (tratadoPeloFluxoDeReserva) return;
+  // Descrição amigável do que o cliente mandou, pra aparecer no histórico de atendimentos — toque
+  // num botão (postback) não tem texto de verdade, então usa o título do botão nesse caso.
+  const descricaoDaMensagemRecebida = postback
+    ? `[botão] ${postback.title ?? postback.payload}`
+    : textoDaMensagem ?? "[mensagem sem texto — áudio, imagem, story etc.]";
 
-  if (!textoDaMensagem) {
-    return;
+  let tipoResposta: "reserva" | "palavra_chave" | "gemini" | "sem_resposta" = "sem_resposta";
+  let respostaResumo: string | null = null;
+  let erroOcorrido: unknown = null;
+
+  try {
+    // Etapa 6 — fluxo de reserva: checa ANTES de palavra-chave/Gemini, porque enquanto alguém está
+    // no meio de uma reserva (respondendo data/período/pessoas/WhatsApp/confirmação), toda mensagem
+    // nova dessa pessoa precisa ser tratada como resposta da pergunta atual — nunca cair no
+    // atendimento normal por engano. Se `processarMensagemDeReserva` devolver `true`, já cuidou de
+    // tudo (mandou a próxima pergunta, ou terminou o fluxo).
+    const tratadoPeloFluxoDeReserva = await processarMensagemDeReserva(admin, conta, idDoCliente, mensagem);
+
+    if (tratadoPeloFluxoDeReserva) {
+      tipoResposta = "reserva";
+      respostaResumo = "Tratado pelo fluxo de reserva (mensagens configuradas na aba Reserva).";
+    } else if (textoDaMensagem) {
+      const { data: palavrasChave, error: erroAoBuscarPalavrasChave } = await admin
+        .from("chatbot_keywords")
+        .select("palavra_chave, mensagens, pausa_entre_mensagens_ms")
+        .eq("account_id", conta.id)
+        .eq("ativo", true)
+        .order("created_at", { ascending: true });
+
+      if (erroAoBuscarPalavrasChave) throw erroAoBuscarPalavrasChave;
+
+      const textoNormalizado = normalizar(textoDaMensagem);
+
+      const palavraChaveCorrespondente = (palavrasChave ?? []).find((pc) => {
+        const variacoes = (pc.palavra_chave ?? "")
+          .split(",")
+          .map((v: string) => normalizar(v.trim()))
+          .filter((v: string) => v.length > 0);
+
+        return variacoes.some((variacao: string) => textoNormalizado.includes(variacao));
+      });
+
+      if (palavraChaveCorrespondente) {
+        const mensagensDaSequencia: string[] = Array.isArray(palavraChaveCorrespondente.mensagens)
+          ? palavraChaveCorrespondente.mensagens
+          : [];
+        const pausaMs = Math.min(palavraChaveCorrespondente.pausa_entre_mensagens_ms ?? 0, 4000);
+
+        for (let i = 0; i < mensagensDaSequencia.length; i++) {
+          if (i > 0 && pausaMs > 0) {
+            await aguardar(pausaMs);
+          }
+          await enviarMensagemDirect(conta.access_token, idDoCliente, mensagensDaSequencia[i]);
+        }
+
+        tipoResposta = "palavra_chave";
+        respostaResumo = mensagensDaSequencia.join(" | ") || null;
+      } else {
+        // Nenhuma palavra-chave bateu — Etapa 5: cai no fallback do Gemini.
+        const respostaGemini = await responderComGemini(admin, conta, idDoCliente, textoDaMensagem);
+
+        if (respostaGemini) {
+          tipoResposta = "gemini";
+          respostaResumo = respostaGemini;
+        } else {
+          tipoResposta = "sem_resposta";
+        }
+      }
+    } else {
+      tipoResposta = "sem_resposta";
+    }
+  } catch (erro) {
+    erroOcorrido = erro;
   }
 
-  const { data: palavrasChave, error: erroAoBuscarPalavrasChave } = await admin
-    .from("chatbot_keywords")
-    .select("palavra_chave, mensagens, pausa_entre_mensagens_ms")
-    .eq("account_id", conta.id)
-    .eq("ativo", true)
-    .order("created_at", { ascending: true });
-
-  if (erroAoBuscarPalavrasChave) throw erroAoBuscarPalavrasChave;
-
-  const textoNormalizado = normalizar(textoDaMensagem);
-
-  const palavraChaveCorrespondente = (palavrasChave ?? []).find((pc) => {
-    const variacoes = (pc.palavra_chave ?? "")
-      .split(",")
-      .map((v: string) => normalizar(v.trim()))
-      .filter((v: string) => v.length > 0);
-
-    return variacoes.some((variacao: string) => textoNormalizado.includes(variacao));
+  // Registro no histórico de atendimentos (melhor esforço — nunca atrasa nem derruba o
+  // processamento da mensagem de verdade, mesmo se der algum problema aqui).
+  await registrarAtendimento(admin, {
+    contaId: conta.id,
+    tokenDaConta: conta.access_token,
+    idDoCliente,
+    mensagemRecebida: descricaoDaMensagemRecebida,
+    tipoResposta,
+    respostaEnviada: respostaResumo,
+    status: erroOcorrido ? "erro" : tipoResposta === "sem_resposta" ? "sem_resposta" : "respondido",
+    erroDetalhe: erroOcorrido ? String((erroOcorrido as any)?.message ?? erroOcorrido) : null,
   });
 
-  if (palavraChaveCorrespondente) {
-    const mensagensDaSequencia: string[] = Array.isArray(palavraChaveCorrespondente.mensagens)
-      ? palavraChaveCorrespondente.mensagens
-      : [];
-    const pausaMs = Math.min(palavraChaveCorrespondente.pausa_entre_mensagens_ms ?? 0, 4000);
-
-    for (let i = 0; i < mensagensDaSequencia.length; i++) {
-      if (i > 0 && pausaMs > 0) {
-        await aguardar(pausaMs);
-      }
-      await enviarMensagemDirect(conta.access_token, idDoCliente, mensagensDaSequencia[i]);
-    }
-    return;
+  if (erroOcorrido) {
+    console.error("Erro processando evento de mensagem do Direct:", erroOcorrido);
   }
-
-  // Nenhuma palavra-chave bateu — Etapa 5: cai no fallback do Gemini.
-  await responderComGemini(admin, conta, idDoCliente, textoDaMensagem);
 }
 
 async function responderComGemini(
@@ -164,7 +207,7 @@ async function responderComGemini(
   conta: { id: string; access_token: string },
   idDoCliente: string,
   textoDaMensagem: string
-) {
+): Promise<string | null> {
   const { data: config, error: erroAoBuscarConfig } = await admin
     .from("chatbot_account_settings")
     .select("tom_de_voz, guardrails, base_conhecimento")
@@ -174,7 +217,8 @@ async function responderComGemini(
   if (erroAoBuscarConfig) throw erroAoBuscarConfig;
 
   if (!config) {
-    return;
+    // Conta ainda sem configuração de Gemini cadastrada — fica em silêncio.
+    return null;
   }
 
   const promptDoSistema = [
@@ -186,16 +230,18 @@ async function responderComGemini(
     .join("\n\n");
 
   if (!promptDoSistema) {
-    return;
+    return null;
   }
 
   const respostaGerada = await gerarRespostaComGemini(promptDoSistema, textoDaMensagem);
 
   if (!respostaGerada) {
-    return;
+    return null;
   }
 
   await enviarMensagemDirect(conta.access_token, idDoCliente, respostaGerada);
+
+  return respostaGerada;
 }
 
 function normalizar(texto: string): string {
