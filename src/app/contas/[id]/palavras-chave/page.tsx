@@ -11,36 +11,15 @@ export default async function PalavrasChavePage({
 }) {
   const admin = criarClienteAdmin();
 
-  const { data: conta } = await admin
-    .from("chatbot_accounts")
-    .select("id, page_name, instagram_username")
-    .eq("id", params.id)
-    .maybeSingle();
-
-  if (!conta) {
-    return (
-      <main className="mx-auto max-w-xl px-6 py-10">
-        <p className="text-sm text-neutral-400">Conta não encontrada.</p>
-        <a href="/contas" className="text-sm text-neutral-300 underline">
-          Voltar
-        </a>
-      </main>
-    );
-  }
-
   const { data: palavrasChave } = await admin
     .from("chatbot_keywords")
     .select("id, palavra_chave, mensagens, pausa_entre_mensagens_ms, ativo, created_at")
-    .eq("account_id", conta.id)
+    .eq("account_id", params.id)
     .order("created_at", { ascending: true });
 
   return (
-    <main className="mx-auto max-w-xl px-6 py-10">
-      <a href="/contas" className="text-sm text-neutral-400 hover:text-neutral-300">
-        &larr; Voltar pras contas
-      </a>
-      <h1 className="mt-2 text-xl font-semibold">Palavras-chave — {conta.page_name}</h1>
-      <p className="mt-1 text-sm text-neutral-400">@{conta.instagram_username}</p>
+    <div>
+      <h2 className="text-lg font-semibold">Palavras-chave</h2>
 
       {searchParams.erro && (
         <div className="mt-4 rounded-lg border border-red-900 bg-red-950 px-4 py-2 text-sm text-red-300">
@@ -48,7 +27,7 @@ export default async function PalavrasChavePage({
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-3">
+      <div className="mt-4 flex flex-col gap-3">
         {(palavrasChave ?? []).map((pc) => (
           <div
             key={pc.id}
@@ -84,10 +63,10 @@ export default async function PalavrasChavePage({
         )}
       </div>
 
-      <h2 className="mt-10 text-sm font-semibold text-neutral-300">+ Nova palavra-chave</h2>
+      <h3 className="mt-8 text-sm font-semibold text-neutral-300">+ Nova palavra-chave</h3>
 
       <form action="/api/keywords" method="POST" className="mt-3 flex flex-col gap-3">
-        <input type="hidden" name="account_id" value={conta.id} />
+        <input type="hidden" name="account_id" value={params.id} />
 
         <div>
           <label className="text-xs text-neutral-400">
@@ -140,6 +119,6 @@ export default async function PalavrasChavePage({
           Salvar palavra-chave
         </button>
       </form>
-    </main>
+    </div>
   );
 }
