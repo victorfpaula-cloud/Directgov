@@ -58,3 +58,76 @@ export async function enviarMensagemDirect(
     );
   }
 }
+
+/**
+ * Envia uma mensagem com botões de resposta rápida (quick replies) — usado no fluxo de reserva
+ * (Etapa 6) pra oferecer opções tocáveis (Hoje/Amanhã/Outro dia, Almoço/Jantar, Sim/Não). Sempre
+ * inclui as opções por extenso no próprio texto também, porque os botões só aparecem no app do
+ * Instagram (celular) — quem usa o Instagram pelo navegador recebe só o texto, sem botão nenhum,
+ * então o texto sozinho precisa dar pra responder digitando.
+ */
+export async function enviarMensagemComBotoes(
+  tokenDaConta: string,
+  igsidDoCliente: string,
+  texto: string,
+  botoes: { titulo: string; payload: string }[]
+): Promise<void> {
+  const resposta = await fetch(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(
+      tokenDaConta
+    )}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: igsidDoCliente },
+        message: {
+          text: texto,
+          quick_replies: botoes.map((botao) => ({
+            content_type: "text",
+            title: botao.titulo,
+            payload: botao.payload,
+          })),
+        },
+      }),
+      cache: "no-store",
+    }
+  );
+
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text().catch(() => "");
+    throw new Error(
+      `Falha ao enviar mensagem com botões pro Direct (status ${resposta.status}): ${corpoErro}`
+    );
+  }
+}
+
+/**
+ * Busca nome e @usuário do Instagram de quem mandou a mensagem — usado no fluxo de reserva pra
+ * não precisar perguntar o nome (Etapa 6). Se a chamada falhar por qualquer motivo, devolve um
+ * nome genérico em vez de derrubar o fluxo inteiro por causa disso.
+ */
+export async function buscarPerfilDoCliente(
+  tokenDaConta: string,
+  instagramScopedId: string
+): Promise<{ nome: string; username: string | null }> {
+  try {
+    const resposta = await fetch(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramScopedId}?fields=name,username&access_token=${encodeURIComponent(
+        tokenDaConta
+      )}`,
+      { cache: "no-store" }
+    );
+
+    if (!resposta.ok) return { nome: "Cliente", username: null };
+
+    const dados = await resposta.json();
+    return {
+      nome: typeof dados?.name === "string" && dados.name ? dados.name : "Cliente",
+      username: typeof dados?.username === "string" ? dados.username : null,
+    };
+  } catch (erro) {
+    console.error("Falha ao buscar perfil do cliente no Instagram:", erro);
+    return { nome: "Cliente", username: null };
+  }
+}
