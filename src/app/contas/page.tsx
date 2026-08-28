@@ -1,4 +1,5 @@
 import { criarClienteAdmin } from "@/lib/supabase/admin";
+import { BotaoPausar } from "./BotaoPausar";
 
 export const dynamic = "force-dynamic";
 
@@ -16,23 +17,32 @@ const MENSAGENS_DE_ERRO: Record<string, string> = {
   falha_ao_excluir: "Deu um erro excluindo a conta. Tenta de novo em instantes.",
 };
 
-// Estilo de cada conta (avatar + faixa colorida no topo do cartão + brilho ao passar o mouse) —
-// escolhido de forma estável a partir do id, então a mesma conta sempre cai no mesmo estilo.
-// Cartão em si ficou num cinza mais claro (neutral-800) que a página (neutral-900) — antes era o
-// contrário (cartão mais escuro que a página), que o Victor achou "muito preto" — assim os
-// cartões ficam claramente destacados/"flutuando" sobre o fundo, em vez de se misturar com ele.
+// Estilo de cada conta (avatar + brilho ao passar o mouse) — escolhido de forma estável a partir
+// do id, então a mesma conta sempre cai no mesmo estilo. Cartão em si ficou num cinza mais claro
+// (neutral-800) que a página (neutral-900) — antes era o contrário (cartão mais escuro que a
+// página), que o Victor achou "muito preto" — assim os cartões ficam claramente destacados/
+// "flutuando" sobre o fundo, em vez de se misturar com ele.
 const ESTILOS_CONTA = [
-  { avatar: "bg-emerald-950 text-emerald-300", faixa: "bg-emerald-500", brilho: "hover:shadow-emerald-950/50" },
-  { avatar: "bg-sky-950 text-sky-300", faixa: "bg-sky-500", brilho: "hover:shadow-sky-950/50" },
-  { avatar: "bg-amber-950 text-amber-300", faixa: "bg-amber-500", brilho: "hover:shadow-amber-950/50" },
-  { avatar: "bg-fuchsia-950 text-fuchsia-300", faixa: "bg-fuchsia-500", brilho: "hover:shadow-fuchsia-950/50" },
-  { avatar: "bg-rose-950 text-rose-300", faixa: "bg-rose-500", brilho: "hover:shadow-rose-950/50" },
+  { avatar: "bg-emerald-950 text-emerald-300", brilho: "hover:shadow-emerald-950/50" },
+  { avatar: "bg-sky-950 text-sky-300", brilho: "hover:shadow-sky-950/50" },
+  { avatar: "bg-amber-950 text-amber-300", brilho: "hover:shadow-amber-950/50" },
+  { avatar: "bg-fuchsia-950 text-fuchsia-300", brilho: "hover:shadow-fuchsia-950/50" },
+  { avatar: "bg-rose-950 text-rose-300", brilho: "hover:shadow-rose-950/50" },
 ];
 
 function estiloDaConta(id: string) {
   let soma = 0;
   for (const caractere of id) soma += caractere.charCodeAt(0);
   return ESTILOS_CONTA[soma % ESTILOS_CONTA.length];
+}
+
+// Cor da faixa no topo do cartão — agora é sobre STATUS, não mais sobre qual conta é: verde
+// enquanto ativa e sem erro hoje, amarela quando pausada, vermelha quando ativa mas teve pelo
+// menos um erro hoje (isso avisa de problema batendo o olho, antes mesmo de entrar na conta).
+function corDaFaixa(conta: { active: boolean }, stats: EstatisticaDoDia) {
+  if (!conta.active) return "bg-amber-500";
+  if (stats.erros > 0) return "bg-red-500";
+  return "bg-green-500";
 }
 
 // Meia-noite de hoje, horário de São Paulo, convertida pra um instante UTC — usado como corte
@@ -146,8 +156,8 @@ export default async function ContasPage({
                 conta.active ? "border-neutral-700" : "border-red-950/60"
               }`}
             >
-              {/* Faixa colorida no topo do cartão — cinza quando pausada, na cor da conta quando ativa. */}
-              <span className={`absolute inset-x-0 top-0 h-1 ${conta.active ? estilo.faixa : "bg-red-600"}`} />
+              {/* Faixa colorida no topo do cartão — verde ativa, amarela pausada, vermelha com erro hoje. */}
+              <span className={`absolute inset-x-0 top-0 h-1 ${corDaFaixa(conta, stats)}`} />
 
               <div className="flex flex-col px-5 pb-5">
                 <div className="flex items-center justify-between">
@@ -206,12 +216,7 @@ export default async function ContasPage({
                     <form action="/api/contas/status" method="POST" className="flex-1">
                       <input type="hidden" name="account_id" value={conta.id} />
                       <input type="hidden" name="ativar" value={conta.active ? "0" : "1"} />
-                      <button
-                        type="submit"
-                        className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-950"
-                      >
-                        {conta.active ? "Pausar" : "Reativar"}
-                      </button>
+                      <BotaoPausar ativo={conta.active} />
                     </form>
 
                     <a
