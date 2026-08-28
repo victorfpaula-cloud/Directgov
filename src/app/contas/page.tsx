@@ -98,26 +98,43 @@ export default async function ContasPage({
     }
   }
 
-  // "Status do dia": conta rápida de quantos atendimentos essa conta teve hoje e quantos deram
+  // "Status do dia": conta rápida de quantos CLIENTES essa conta atendeu hoje e quantos tiveram
   // erro — só pra dar uma visão geral batendo o olho, sem precisar entrar em cada conta. Isso
   // roda só quando essa página é aberta (não é um relógio rodando toda hora em segundo plano —
   // essa tela já busca dado novo a cada abertura, então já vem sempre atualizado sozinho, sem
   // gastar nada além do que essa página já gasta hoje).
+  //
+  // Contado por CLIENTE (instagram_scoped_id), não por mensagem — um cliente que trocou várias
+  // mensagens com o bot hoje conta como 1 só, igual já é agrupado na tela de Atendimentos de cada
+  // conta. Um Set por conta garante que cada cliente só entra uma vez, mesmo respondido/com erro
+  // várias vezes ao longo do dia.
   const estatisticasPorConta = new Map<string, EstatisticaDoDia>();
   if (contas && contas.length > 0) {
     const { data: atendimentosDeHoje } = await admin
       .from("chatbot_atendimentos")
-      .select("account_id, status")
+      .select("account_id, instagram_scoped_id, status")
       .gte("criado_em", inicioDoDiaEmSaoPauloISO());
 
+    const clientesRespondidosPorConta = new Map<string, Set<string>>();
+    const clientesComErroPorConta = new Map<string, Set<string>>();
+
     for (const atendimento of atendimentosDeHoje ?? []) {
-      const atual = estatisticasPorConta.get(atendimento.account_id) ?? { respondidas: 0, erros: 0 };
       if (atendimento.status === "erro") {
-        atual.erros += 1;
+        const clientes = clientesComErroPorConta.get(atendimento.account_id) ?? new Set<string>();
+        clientes.add(atendimento.instagram_scoped_id);
+        clientesComErroPorConta.set(atendimento.account_id, clientes);
       } else if (atendimento.status === "respondido") {
-        atual.respondidas += 1;
+        const clientes = clientesRespondidosPorConta.get(atendimento.account_id) ?? new Set<string>();
+        clientes.add(atendimento.instagram_scoped_id);
+        clientesRespondidosPorConta.set(atendimento.account_id, clientes);
       }
-      estatisticasPorConta.set(atendimento.account_id, atual);
+    }
+
+    for (const conta of contas) {
+      estatisticasPorConta.set(conta.id, {
+        respondidas: clientesRespondidosPorConta.get(conta.id)?.size ?? 0,
+        erros: clientesComErroPorConta.get(conta.id)?.size ?? 0,
+      });
     }
   }
 
@@ -212,18 +229,20 @@ export default async function ContasPage({
                 </p>
                 <p className="text-sm text-neutral-500">@{conta.instagram_username}</p>
 
-                {/* Status do dia — quantos atendimentos hoje, e quantos deram erro (se houver). */}
+                {/* Status do dia — quantos CLIENTES foram atendidos hoje, e quantos tiveram erro
+                    (se houver). Por cliente, não por mensagem — ver comentário lá em cima. */}
                 <a
                   href={`/contas/${conta.id}/atendimentos`}
                   className="mt-3 flex flex-wrap items-center gap-2 text-xs"
                 >
                   <span className="rounded-full border border-neutral-700 bg-neutral-900 px-2 py-0.5 text-neutral-300">
-                    {stats.respondidas} respondida{stats.respondidas === 1 ? "" : "s"} hoje
+                    {stats.respondidas} cliente{stats.respondidas === 1 ? "" : "s"} respondido
+                    {stats.respondidas === 1 ? "" : "s"} hoje
                   </span>
                   {stats.erros > 0 && (
                     <span className="flex items-center gap-1 rounded-full border border-red-900 bg-red-950 px-2 py-0.5 font-medium text-red-300">
                       <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                      {stats.erros} erro{stats.erros === 1 ? "" : "s"} hoje
+                      {stats.erros} cliente{stats.erros === 1 ? "" : "s"} com erro hoje
                     </span>
                   )}
                 </a>
