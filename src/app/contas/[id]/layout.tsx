@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
+import AbasDaConta from "./AbasDaConta";
 
 export const dynamic = "force-dynamic";
 
@@ -18,44 +19,21 @@ export default async function ContaLayout({
     .maybeSingle();
 
   return (
-    <main className="mx-auto max-w-xl px-6 py-10">
+    <main className="mx-auto max-w-3xl px-6 py-10">
       <a href="/contas" className="text-sm text-neutral-400 hover:text-neutral-300">
         &larr; Voltar pras contas
       </a>
 
       {conta ? (
         <>
-          <h1 className="mt-2 text-xl font-semibold">{conta.page_name}</h1>
-          <p className="mt-1 text-sm text-neutral-400">@{conta.instagram_username}</p>
+          <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-5 shadow-lg shadow-black/40">
+            <h1 className="text-xl font-semibold">{conta.page_name}</h1>
+            <p className="mt-1 text-sm text-neutral-400">@{conta.instagram_username}</p>
 
-          <nav className="mt-6 flex gap-2 border-b border-neutral-800 pb-3">
-            <a
-              href={`/contas/${conta.id}/palavras-chave`}
-              className="rounded-lg px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-900"
-            >
-              Palavras-chave
-            </a>
-            <a
-              href={`/contas/${conta.id}/gemini`}
-              className="rounded-lg px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-900"
-            >
-              Gemini
-            </a>
-            <a
-              href={`/contas/${conta.id}/reserva`}
-              className="rounded-lg px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-900"
-            >
-              Reserva
-            </a>
-            <a
-              href={`/contas/${conta.id}/atendimentos`}
-              className="rounded-lg px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-900"
-            >
-              Atendimentos
-            </a>
-          </nav>
+            <AbasDaConta contaId={conta.id} />
 
-          <div className="mt-6">{children}</div>
+            <div className="mt-6">{children}</div>
+          </div>
         </>
       ) : (
         <p className="mt-4 text-sm text-neutral-400">Conta não encontrada.</p>
