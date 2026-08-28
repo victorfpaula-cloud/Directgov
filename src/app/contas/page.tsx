@@ -203,7 +203,13 @@ export default async function ContasPage({
                   </span>
                 </div>
 
-                <p className="mt-4 font-medium text-neutral-100">{conta.page_name}</p>
+                {/* min-h reserva o espaço de 2 linhas mesmo quando o nome cabe numa linha só —
+                    assim todo cartão fica com a mesma altura, tenha nome curto ou comprido. Se o
+                    nome for maior que 2 linhas, corta com "..." (line-clamp-2) em vez de esticar
+                    o cartão além da conta. */}
+                <p className="mt-4 line-clamp-2 min-h-[2.5rem] font-medium leading-tight text-neutral-100">
+                  {conta.page_name}
+                </p>
                 <p className="text-sm text-neutral-500">@{conta.instagram_username}</p>
 
                 {/* Status do dia — quantos atendimentos hoje, e quantos deram erro (se houver). */}
