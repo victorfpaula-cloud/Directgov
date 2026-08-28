@@ -49,8 +49,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Pedido enxuto de propósito: a Meta devolveu erro genérico ("reduza a quantidade de dados")
+  // quando pedíamos participants+updated_time+snippet+message_count+unread_count com limit=50 de
+  // uma vez. Reduzido pro mínimo (só snippet + updated_time, limit menor) pra conseguir um
+  // resultado — dá pra pedir mais campos depois, com calma, assim que confirmarmos que o básico
+  // funciona.
   const resposta = await fetch(
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/${conta.page_id}/conversations?platform=instagram&fields=participants,updated_time,snippet,message_count,unread_count&limit=50&access_token=${encodeURIComponent(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${conta.page_id}/conversations?platform=instagram&fields=snippet,updated_time&limit=10&access_token=${encodeURIComponent(
       conta.access_token
     )}`,
     { cache: "no-store" }
