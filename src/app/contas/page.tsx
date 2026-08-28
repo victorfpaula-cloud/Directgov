@@ -45,7 +45,7 @@ export default async function ContasPage({
   const avisoFalhaWebhook = searchParams.aviso === "falha_ao_inscrever_webhook";
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
+    <main className="mx-auto max-w-4xl px-6 py-10">
       <h1 className="text-2xl font-semibold">Contas conectadas</h1>
       <p className="mt-1 text-sm text-neutral-400">
         Atendimento automático de Instagram Direct — suas contas conectadas.
@@ -58,7 +58,7 @@ export default async function ContasPage({
       )}
 
       {mensagemDeErro && (
-        <div className="mt-4 rounded-lg border border-red-900 bg-red-950 px-4 py-2 text-sm text-red-300">
+        <div className="mt-4 break-words rounded-lg border border-red-900 bg-red-950 px-4 py-2 text-sm text-red-300">
           {mensagemDeErro}
         </div>
       )}
@@ -70,18 +70,18 @@ export default async function ContasPage({
             Facebook recusou o pedido). Tenta conectar essa mesma conta de novo em instantes.
           </p>
           {searchParams.detalhe && (
-            <p className="mt-2 rounded-md bg-yellow-900/40 px-2 py-1 font-mono text-xs text-yellow-200">
+            <p className="mt-2 break-words rounded-md bg-yellow-900/40 px-2 py-1 font-mono text-xs text-yellow-200">
               Motivo do Facebook: {searchParams.detalhe}
             </p>
           )}
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {(contas ?? []).map((conta) => (
           <div
             key={conta.id}
-            className={`rounded-2xl border border-neutral-800 bg-neutral-900 p-5 transition ${
+            className={`rounded-2xl border border-neutral-800 bg-neutral-950 p-5 shadow-lg shadow-black/40 transition ${
               conta.active ? "" : "opacity-60"
             }`}
           >
