@@ -54,11 +54,18 @@ export async function processarMensagemDeReserva(
 
   if (erroAoBuscarConfig) throw erroAoBuscarConfig;
 
-  const palavraChave = config?.palavra_chave_reserva?.trim();
+  // O campo "Palavra-chave da Reserva" aceita várias variações separadas por vírgula (ex: "reserva,
+  // reservas, reservar") — igual ao campo de palavra-chave normal da aba Palavras-chave. Cada
+  // variação é comparada separadamente contra a mensagem; basta UMA bater pra iniciar o fluxo.
+  const variacoesDaPalavraChaveDeReserva = (config?.palavra_chave_reserva ?? "")
+    .split(",")
+    .map((v: string) => normalizar(v.trim()))
+    .filter((v: string) => v.length > 0);
+
   const bateuPalavraChave =
-    !!palavraChave &&
+    variacoesDaPalavraChaveDeReserva.length > 0 &&
     !!textoDaMensagem &&
-    normalizar(textoDaMensagem).includes(normalizar(palavraChave));
+    variacoesDaPalavraChaveDeReserva.some((variacao) => normalizar(textoDaMensagem).includes(variacao));
 
   const { data: conversa, error: erroAoBuscarConversa } = await admin
     .from("chatbot_conversations")
