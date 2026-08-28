@@ -1,5 +1,7 @@
 import { criarClienteAdmin } from "@/lib/supabase/admin";
+import { buscarFotoDePerfilDaConta } from "@/lib/metaMessaging";
 import { BotaoPausar } from "./BotaoPausar";
+import { AvatarConta } from "./AvatarConta";
 
 export const dynamic = "force-dynamic";
 
@@ -76,8 +78,25 @@ export default async function ContasPage({
   const admin = criarClienteAdmin();
   const { data: contas } = await admin
     .from("chatbot_accounts")
-    .select("id, page_name, instagram_username, active")
+    .select("id, page_name, instagram_username, active, access_token, instagram_user_id")
     .order("created_at", { ascending: true });
+
+  // Foto de perfil de cada conta, buscada direto na Meta a cada abertura da tela (nunca guardada
+  // no banco — ver o comentário de buscarFotoDePerfilDaConta pra entender o motivo). O access_token
+  // só é usado aqui, dentro do servidor, pra fazer essa busca — nunca é passado pro componente de
+  // cliente (AvatarConta só recebe a URL da foto já pronta).
+  const fotosPorConta = new Map<string, string | null>();
+  if (contas && contas.length > 0) {
+    const resultados = await Promise.all(
+      contas.map(async (conta) => ({
+        id: conta.id,
+        foto: await buscarFotoDePerfilDaConta(conta.access_token, conta.instagram_user_id),
+      }))
+    );
+    for (const resultado of resultados) {
+      fotosPorConta.set(resultado.id, resultado.foto);
+    }
+  }
 
   // "Status do dia": conta rápida de quantos atendimentos essa conta teve hoje e quantos deram
   // erro — só pra dar uma visão geral batendo o olho, sem precisar entrar em cada conta. Isso
@@ -161,13 +180,12 @@ export default async function ContasPage({
 
               <div className="flex flex-col px-5 pb-5">
                 <div className="flex items-center justify-between">
-                  <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-full text-lg font-semibold ring-2 ring-offset-2 ring-offset-neutral-800 ${estilo.avatar} ${
-                      conta.active ? "ring-neutral-700" : "ring-red-900"
-                    }`}
-                  >
-                    {conta.page_name.charAt(0).toUpperCase()}
-                  </div>
+                  <AvatarConta
+                    fotoUrl={fotosPorConta.get(conta.id) ?? null}
+                    letra={conta.page_name.charAt(0).toUpperCase()}
+                    corDeFundo={estilo.avatar}
+                    corDoAnel={conta.active ? "ring-neutral-700" : "ring-red-900"}
+                  />
 
                   <span
                     className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
