@@ -65,7 +65,7 @@ export async function processarMensagemDeReserva(
   const bateuPalavraChave =
     variacoesDaPalavraChaveDeReserva.length > 0 &&
     !!textoDaMensagem &&
-    variacoesDaPalavraChaveDeReserva.some((variacao) => normalizar(textoDaMensagem).includes(variacao));
+    variacoesDaPalavraChaveDeReserva.some((variacao: string) => normalizar(textoDaMensagem).includes(variacao));
 
   const { data: conversa, error: erroAoBuscarConversa } = await admin
     .from("chatbot_conversations")
