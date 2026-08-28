@@ -43,7 +43,7 @@ export default async function ReservaConfigPage({
       )}
 
       {searchParams.erro && (
-        <div className="mt-4 rounded-lg border border-red-900 bg-red-950 px-4 py-2 text-sm text-red-300">
+        <div className="mt-4 break-words rounded-lg border border-red-900 bg-red-950 px-4 py-2 text-sm text-red-300">
           {searchParams.erro}
         </div>
       )}
@@ -67,7 +67,7 @@ export default async function ReservaConfigPage({
           </p>
         </div>
 
-        <div className="rounded-lg border border-neutral-800 p-4">
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 shadow-md shadow-black/30">
           <p className="text-sm font-medium text-neutral-200">Mensagens do bot</p>
           <p className="mt-1 text-xs text-neutral-500">
             Cada campo abaixo é o que o bot manda naquele momento da conversa. Deixe em branco pra
@@ -85,7 +85,7 @@ export default async function ReservaConfigPage({
               rows={2}
               defaultValue={config?.reserva_msg_inicial ?? ""}
               placeholder="(em branco = sem saudação, vai direto pra pergunta da data)"
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+              className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
             />
           </div>
 
@@ -100,7 +100,7 @@ export default async function ReservaConfigPage({
               rows={2}
               defaultValue={config?.reserva_msg_pergunta_data ?? ""}
               placeholder="Pra qual dia você quer reservar? Toque num botão abaixo ou digite: Hoje, Amanhã, Outro dia."
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+              className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
             />
           </div>
 
@@ -114,7 +114,7 @@ export default async function ReservaConfigPage({
               rows={2}
               defaultValue={config?.reserva_msg_pergunta_periodo ?? ""}
               placeholder="É pro Almoço ou Jantar?"
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+              className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
             />
           </div>
 
@@ -128,7 +128,7 @@ export default async function ReservaConfigPage({
               rows={2}
               defaultValue={config?.reserva_msg_pergunta_pessoas ?? ""}
               placeholder="Pra quantas pessoas é a reserva?"
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+              className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
             />
           </div>
 
@@ -143,7 +143,7 @@ export default async function ReservaConfigPage({
               rows={2}
               defaultValue={config?.reserva_msg_pergunta_whatsapp ?? ""}
               placeholder="Qual o melhor WhatsApp pra contato?"
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+              className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
             />
           </div>
         </div>
@@ -157,7 +157,7 @@ export default async function ReservaConfigPage({
             rows={6}
             defaultValue={config?.reserva_regras_texto ?? ""}
             placeholder="Ex: tolerância de 15 minutos, mesa liberada após esse prazo"
-            className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+            className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
           />
         </div>
 
@@ -171,7 +171,7 @@ export default async function ReservaConfigPage({
             rows={3}
             defaultValue={config?.reserva_msg_confirmada ?? ""}
             placeholder="Reserva confirmada! Te esperamos por lá. Qualquer mudança, é só chamar por aqui de novo."
-            className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+            className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
           />
         </div>
 
@@ -185,11 +185,11 @@ export default async function ReservaConfigPage({
             rows={3}
             defaultValue={config?.reserva_msg_recusada ?? ""}
             placeholder="Sem problema, fica pra próxima! Se quiser reservar depois, é só chamar de novo."
-            className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+            className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="text-xs text-neutral-400">
               Limite normal de pessoas (só informativo)
@@ -224,7 +224,7 @@ export default async function ReservaConfigPage({
             rows={3}
             defaultValue={config?.reserva_mensagem_limite_maximo ?? ""}
             placeholder="Nossas reservas do dia já estão encerradas porque todas as mesas já foram preenchidas. Nosso atendimento será apenas por ordem de chegada."
-            className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+            className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
           />
         </div>
 
@@ -252,13 +252,13 @@ export default async function ReservaConfigPage({
           />
         </div>
 
-        <div className="rounded-lg border border-neutral-800 p-4">
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 shadow-md shadow-black/30">
           <label className="flex items-center gap-2 text-sm text-neutral-200">
             <input
               type="checkbox"
               name="reserva_pausa_ativa"
               defaultChecked={config?.reserva_pausa_ativa ?? false}
-              className="h-4 w-4 rounded border-neutral-700 bg-neutral-900"
+              className="h-4 w-4 rounded border-neutral-700 bg-neutral-950"
             />
             Pausar reservas temporariamente
           </label>
@@ -278,7 +278,7 @@ export default async function ReservaConfigPage({
               type="date"
               name="reserva_pausa_data"
               defaultValue={config?.reserva_pausa_data ?? ""}
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
             />
           </div>
 
@@ -289,12 +289,12 @@ export default async function ReservaConfigPage({
               rows={3}
               defaultValue={config?.reserva_pausa_mensagem ?? ""}
               placeholder="No momento não estamos aceitando novas reservas por aqui. Assim que reabrirmos, avisamos por aqui."
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+              className="mt-1 w-full resize-y rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
             />
           </div>
         </div>
 
-        <div className="rounded-lg border border-neutral-800 p-4">
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 shadow-md shadow-black/30">
           <p className="text-sm font-medium text-neutral-200">Bloquear datas específicas</p>
           <p className="mt-1 text-xs text-neutral-500">
             Diferente da pausa acima (que trava TUDO na hora), isso aqui bloqueia só os dias que
