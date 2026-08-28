@@ -99,31 +99,31 @@ function agruparPorCliente(atendimentos: Atendimento[]): GrupoPorCliente[] {
 
 function CartaoDeAtendimento({ atendimento }: { atendimento: Atendimento }) {
   return (
-    <div className="rounded-lg border border-neutral-800 p-4 text-sm">
+    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 text-sm shadow-sm shadow-black/20">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-neutral-500">{formatarDataHora(atendimento.criado_em)}</span>
         <BadgeDeStatus status={atendimento.status} />
       </div>
 
-      <p className="mt-2 text-neutral-400">
+      <p className="mt-2 break-words text-neutral-400">
         <span className="text-neutral-500">Mensagem recebida: </span>
         {atendimento.mensagem_recebida ?? "—"}
       </p>
 
-      <p className="mt-1 text-neutral-400">
+      <p className="mt-1 break-words text-neutral-400">
         <span className="text-neutral-500">Tipo de resposta: </span>
         {RESPOSTA_POR_TIPO[atendimento.tipo_resposta] ?? atendimento.tipo_resposta}
       </p>
 
       {atendimento.resposta_enviada && (
-        <p className="mt-1 text-neutral-400">
+        <p className="mt-1 break-words text-neutral-400">
           <span className="text-neutral-500">Resposta enviada: </span>
           {atendimento.resposta_enviada}
         </p>
       )}
 
       {atendimento.status === "erro" && atendimento.erro_detalhe && (
-        <p className="mt-2 rounded-lg border border-red-900 bg-red-950 px-3 py-2 text-xs text-red-300">
+        <p className="mt-2 break-words rounded-lg border border-red-900 bg-red-950 px-3 py-2 text-xs text-red-300">
           {atendimento.erro_detalhe}
         </p>
       )}
@@ -207,12 +207,12 @@ export default async function AtendimentosPage({
           {grupos.map((grupo) => (
             <details
               key={grupo.instagramScopedId}
-              className="group rounded-lg border border-neutral-800 open:border-neutral-600"
+              className="group rounded-lg border border-neutral-800 bg-neutral-950 shadow-md shadow-black/30 open:border-neutral-600"
             >
               <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-neutral-500 transition-transform group-open:rotate-90">▸</span>
-                  <span className="font-medium text-neutral-200">
+                  <span className="break-words font-medium text-neutral-200">
                     {grupo.clienteNome ?? "Cliente"}
                     {grupo.clienteUsername ? (
                       <span className="text-neutral-500"> · @{grupo.clienteUsername}</span>
