@@ -143,3 +143,34 @@ export async function buscarPerfilDoCliente(
     return { nome: "Cliente", username: null };
   }
 }
+
+/**
+ * Busca a URL da foto de perfil da PRÓPRIA conta do Instagram conectada (não de um cliente) —
+ * usada pra mostrar a foto de verdade na bolinha do avatar da tela de contas, em vez de só uma
+ * letra. De propósito NUNCA é guardada no banco: esse link que a Meta devolve é temporário e
+ * expira depois de um tempo, então se guardássemos ele, a foto ia quebrar sozinha mais tarde sem
+ * nenhum aviso. Por isso é buscada de novo a cada vez que a tela de contas é aberta (mesma lógica
+ * do "status do dia" — a tela já busca tudo de novo a cada abertura). Se falhar por qualquer
+ * motivo, devolve null (a tela usa a bolinha colorida com a letra como reserva).
+ */
+export async function buscarFotoDePerfilDaConta(
+  tokenDaConta: string,
+  instagramUserId: string
+): Promise<string | null> {
+  try {
+    const resposta = await fetch(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramUserId}?fields=profile_picture_url&access_token=${encodeURIComponent(
+        tokenDaConta
+      )}`,
+      { cache: "no-store" }
+    );
+
+    if (!resposta.ok) return null;
+
+    const dados = await resposta.json();
+    return typeof dados?.profile_picture_url === "string" ? dados.profile_picture_url : null;
+  } catch (erro) {
+    console.error("Falha ao buscar foto de perfil da conta:", erro);
+    return null;
+  }
+}
