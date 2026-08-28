@@ -199,6 +199,38 @@ async function continuarFluxo(
 ) {
   const dados = conversa.dados_coletados ?? {};
 
+  // Proteção contra a Meta reentregando o MESMO toque/mensagem do cliente duas vezes com um ID de
+  // mensagem diferente cada vez (por isso o dedup por message_id, lá no webhook, não pega esse
+  // caso — o ID em si já vem diferente). Sintoma visto na prática: o botão "Posso confirmar?"
+  // chegando duplicado pro cliente, sem ele ter feito nada duas vezes. Guarda a "assinatura" (o
+  // payload do botão, ou o texto digitado) da última mensagem já processada dessa conversa junto
+  // com o horário; se a mensagem que chegou agora é IDÊNTICA à de poucos segundos atrás, é quase
+  // certeza que é a mesma entrega da Meta duplicada — ignora, sem reprocessar nem mandar nada de
+  // novo. Isso também tem o efeito colateral bom de proteger contra o próprio cliente dando duplo
+  // toque sem querer no botão (por exemplo, evita criar a reserva duas vezes se ele tocar "Sim"
+  // duas vezes rápido).
+  const JANELA_DUPLICATA_MS = 30_000;
+  const assinaturaDestaMensagem = payloadDoBotao ?? normalizar((textoDaMensagem ?? "").trim());
+  const agora = Date.now();
+  const ultimaProcessada = dados.__ultimaMensagemProcessada as
+    | { assinatura: string; em: number }
+    | undefined;
+
+  if (
+    assinaturaDestaMensagem &&
+    ultimaProcessada &&
+    ultimaProcessada.assinatura === assinaturaDestaMensagem &&
+    agora - ultimaProcessada.em < JANELA_DUPLICATA_MS
+  ) {
+    return;
+  }
+
+  dados.__ultimaMensagemProcessada = { assinatura: assinaturaDestaMensagem, em: agora };
+  await admin
+    .from("chatbot_conversations")
+    .update({ dados_coletados: dados, atualizado_em: new Date().toISOString() })
+    .eq("id", conversa.id);
+
   switch (conversa.etapa_atual) {
     case "data": {
       const { data: config } = await buscarConfig(admin, conta.id);
@@ -366,7 +398,7 @@ async function continuarFluxo(
       await enviarMensagemDirect(
         conta.access_token,
         idDoCliente,
-        `Confirmando: ${dados.quantidade_pessoas} pessoa(s), dia ${dados.data_reserva_br}, ${periodoTexto}.`
+        `📋 Confirmando:\n${dados.quantidade_pessoas} pessoa(s), dia ${dados.data_reserva_br}, ${periodoTexto}.`
       );
 
       await enviarMensagemComBotoes(conta.access_token, idDoCliente, "Posso confirmar?", [
