@@ -12,34 +12,85 @@ const MENSAGENS_DE_ERRO: Record<string, string> = {
   conexao_expirada: "Essa conexão expirou. Começa de novo clicando em Adicionar conta.",
   pagina_nao_encontrada: "Essa conta não estava mais na lista. Tenta conectar de novo.",
   falha_ao_salvar_conta: "Deu um erro salvando a conta. Tenta de novo em instantes.",
+  falha_ao_pausar: "Deu um erro pausando/reativando a conta. Tenta de novo em instantes.",
+  falha_ao_excluir: "Deu um erro excluindo a conta. Tenta de novo em instantes.",
 };
 
-// Cores do círculo de inicial de cada conta — só um jeito de dar uma diferenciada visual entre
-// contas, escolhida de forma estável a partir do id (a mesma conta sempre cai na mesma cor).
-const CORES_AVATAR = [
-  "bg-emerald-950 text-emerald-300",
-  "bg-sky-950 text-sky-300",
-  "bg-amber-950 text-amber-300",
-  "bg-fuchsia-950 text-fuchsia-300",
-  "bg-rose-950 text-rose-300",
+// Estilo de cada conta (avatar + faixa colorida no topo do cartão + brilho ao passar o mouse) —
+// escolhido de forma estável a partir do id, então a mesma conta sempre cai no mesmo estilo.
+// Cartão em si ficou num cinza mais claro (neutral-800) que a página (neutral-900) — antes era o
+// contrário (cartão mais escuro que a página), que o Victor achou "muito preto" — assim os
+// cartões ficam claramente destacados/"flutuando" sobre o fundo, em vez de se misturar com ele.
+const ESTILOS_CONTA = [
+  { avatar: "bg-emerald-950 text-emerald-300", faixa: "bg-emerald-500", brilho: "hover:shadow-emerald-950/50" },
+  { avatar: "bg-sky-950 text-sky-300", faixa: "bg-sky-500", brilho: "hover:shadow-sky-950/50" },
+  { avatar: "bg-amber-950 text-amber-300", faixa: "bg-amber-500", brilho: "hover:shadow-amber-950/50" },
+  { avatar: "bg-fuchsia-950 text-fuchsia-300", faixa: "bg-fuchsia-500", brilho: "hover:shadow-fuchsia-950/50" },
+  { avatar: "bg-rose-950 text-rose-300", faixa: "bg-rose-500", brilho: "hover:shadow-rose-950/50" },
 ];
 
-function corAvatar(id: string): string {
+function estiloDaConta(id: string) {
   let soma = 0;
   for (const caractere of id) soma += caractere.charCodeAt(0);
-  return CORES_AVATAR[soma % CORES_AVATAR.length];
+  return ESTILOS_CONTA[soma % ESTILOS_CONTA.length];
 }
+
+// Meia-noite de hoje, horário de São Paulo, convertida pra um instante UTC — usado como corte
+// pra contar só os atendimentos de HOJE. Brasil não tem mais horário de verão desde 2019, então
+// São Paulo é sempre UTC-3 fixo (meia-noite em SP = 03:00 UTC) — não precisa de biblioteca de
+// fuso horário pra isso, só somar 3 horas.
+function inicioDoDiaEmSaoPauloISO(): string {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const obter = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? "0";
+
+  const ano = parseInt(obter("year"), 10);
+  const mes = parseInt(obter("month"), 10);
+  const dia = parseInt(obter("day"), 10);
+
+  return new Date(Date.UTC(ano, mes - 1, dia, 3, 0, 0)).toISOString();
+}
+
+type EstatisticaDoDia = { respondidas: number; erros: number };
 
 export default async function ContasPage({
   searchParams,
 }: {
-  searchParams: { erro?: string; conectada?: string; aviso?: string; detalhe?: string };
+  searchParams: { erro?: string; conectada?: string; aviso?: string; detalhe?: string; excluida?: string };
 }) {
   const admin = criarClienteAdmin();
   const { data: contas } = await admin
     .from("chatbot_accounts")
     .select("id, page_name, instagram_username, active")
     .order("created_at", { ascending: true });
+
+  // "Status do dia": conta rápida de quantos atendimentos essa conta teve hoje e quantos deram
+  // erro — só pra dar uma visão geral batendo o olho, sem precisar entrar em cada conta. Isso
+  // roda só quando essa página é aberta (não é um relógio rodando toda hora em segundo plano —
+  // essa tela já busca dado novo a cada abertura, então já vem sempre atualizado sozinho, sem
+  // gastar nada além do que essa página já gasta hoje).
+  const estatisticasPorConta = new Map<string, EstatisticaDoDia>();
+  if (contas && contas.length > 0) {
+    const { data: atendimentosDeHoje } = await admin
+      .from("chatbot_atendimentos")
+      .select("account_id, status")
+      .gte("criado_em", inicioDoDiaEmSaoPauloISO());
+
+    for (const atendimento of atendimentosDeHoje ?? []) {
+      const atual = estatisticasPorConta.get(atendimento.account_id) ?? { respondidas: 0, erros: 0 };
+      if (atendimento.status === "erro") {
+        atual.erros += 1;
+      } else if (atendimento.status === "respondido") {
+        atual.respondidas += 1;
+      }
+      estatisticasPorConta.set(atendimento.account_id, atual);
+    }
+  }
 
   const mensagemDeErro = searchParams.erro ? MENSAGENS_DE_ERRO[searchParams.erro] : null;
   const avisoFalhaWebhook = searchParams.aviso === "falha_ao_inscrever_webhook";
@@ -54,6 +105,12 @@ export default async function ContasPage({
       {searchParams.conectada && (
         <div className="mt-4 rounded-lg border border-green-900 bg-green-950 px-4 py-2 text-sm text-green-300">
           Conta conectada com sucesso.
+        </div>
+      )}
+
+      {searchParams.excluida && (
+        <div className="mt-4 rounded-lg border border-green-900 bg-green-950 px-4 py-2 text-sm text-green-300">
+          Conta excluída.
         </div>
       )}
 
@@ -78,48 +135,97 @@ export default async function ContasPage({
       )}
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {(contas ?? []).map((conta) => (
-          <div
-            key={conta.id}
-            className={`rounded-2xl border border-neutral-800 bg-neutral-950 p-5 shadow-lg shadow-black/40 transition ${
-              conta.active ? "" : "opacity-60"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div
-                className={`flex h-11 w-11 items-center justify-center rounded-full text-lg font-semibold ${corAvatar(
-                  conta.id
-                )}`}
-              >
-                {conta.page_name.charAt(0).toUpperCase()}
-              </div>
-              {!conta.active && (
-                <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-[11px] font-medium text-neutral-400">
-                  pausada
-                </span>
-              )}
-            </div>
+        {(contas ?? []).map((conta) => {
+          const estilo = estiloDaConta(conta.id);
+          const stats = estatisticasPorConta.get(conta.id) ?? { respondidas: 0, erros: 0 };
 
-            <p className="mt-3 flex items-center gap-1.5 font-medium text-neutral-100">
-              {conta.active && (
-                <span
-                  title="Ativa"
-                  aria-label="Ativa"
-                  className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-green-500"
-                />
-              )}
-              {conta.page_name}
-            </p>
-            <p className="text-sm text-neutral-500">@{conta.instagram_username}</p>
-
-            <a
-              href={`/contas/${conta.id}/palavras-chave`}
-              className="mt-4 inline-block w-full rounded-lg border border-neutral-700 px-3 py-1.5 text-center text-xs font-medium text-neutral-300 hover:bg-neutral-800"
+          return (
+            <div
+              key={conta.id}
+              className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-neutral-800 pt-6 shadow-lg shadow-black/30 transition-all hover:-translate-y-0.5 hover:shadow-xl ${estilo.brilho} ${
+                conta.active ? "border-neutral-700" : "border-red-950/60"
+              }`}
             >
-              Configurar atendimento
-            </a>
-          </div>
-        ))}
+              {/* Faixa colorida no topo do cartão — cinza quando pausada, na cor da conta quando ativa. */}
+              <span className={`absolute inset-x-0 top-0 h-1 ${conta.active ? estilo.faixa : "bg-red-600"}`} />
+
+              <div className="flex flex-col px-5 pb-5">
+                <div className="flex items-center justify-between">
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-full text-lg font-semibold ring-2 ring-offset-2 ring-offset-neutral-800 ${estilo.avatar} ${
+                      conta.active ? "ring-neutral-700" : "ring-red-900"
+                    }`}
+                  >
+                    {conta.page_name.charAt(0).toUpperCase()}
+                  </div>
+
+                  <span
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                      conta.active
+                        ? "border-green-900 bg-green-950 text-green-300"
+                        : "border-red-900 bg-red-950 text-red-400"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        conta.active ? "animate-pulse bg-green-500" : "bg-red-500"
+                      }`}
+                    />
+                    {conta.active ? "Ativa" : "Pausada"}
+                  </span>
+                </div>
+
+                <p className="mt-4 font-medium text-neutral-100">{conta.page_name}</p>
+                <p className="text-sm text-neutral-500">@{conta.instagram_username}</p>
+
+                {/* Status do dia — quantos atendimentos hoje, e quantos deram erro (se houver). */}
+                <a
+                  href={`/contas/${conta.id}/atendimentos`}
+                  className="mt-3 flex flex-wrap items-center gap-2 text-xs"
+                >
+                  <span className="rounded-full border border-neutral-700 bg-neutral-900 px-2 py-0.5 text-neutral-300">
+                    {stats.respondidas} respondida{stats.respondidas === 1 ? "" : "s"} hoje
+                  </span>
+                  {stats.erros > 0 && (
+                    <span className="flex items-center gap-1 rounded-full border border-red-900 bg-red-950 px-2 py-0.5 font-medium text-red-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                      {stats.erros} erro{stats.erros === 1 ? "" : "s"} hoje
+                    </span>
+                  )}
+                </a>
+
+                <div className="mt-5 flex flex-col gap-2">
+                  <a
+                    href={`/contas/${conta.id}/palavras-chave`}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-center text-xs font-medium text-neutral-300 hover:bg-neutral-950"
+                  >
+                    Configurar atendimento
+                  </a>
+
+                  <div className="flex gap-2">
+                    <form action="/api/contas/status" method="POST" className="flex-1">
+                      <input type="hidden" name="account_id" value={conta.id} />
+                      <input type="hidden" name="ativar" value={conta.active ? "0" : "1"} />
+                      <button
+                        type="submit"
+                        className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-950"
+                      >
+                        {conta.active ? "Pausar" : "Reativar"}
+                      </button>
+                    </form>
+
+                    <a
+                      href={`/contas/${conta.id}/excluir`}
+                      className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-center text-xs font-medium text-neutral-500 hover:border-red-900 hover:bg-red-950/40 hover:text-red-400"
+                    >
+                      Excluir
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
 
         <a
           href="/api/auth/facebook/start"
