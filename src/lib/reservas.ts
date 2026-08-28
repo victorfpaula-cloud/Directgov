@@ -354,23 +354,25 @@ async function continuarFluxo(
       const regras = config?.reserva_regras_texto?.trim();
       const periodoTexto = dados.periodo === "almoco" ? "almoço" : "jantar";
 
-      // As Regras (texto livre, cadastrado por conta — pode ser bem longo) vão numa mensagem de
-      // texto simples, SEPARADA da mensagem com botão. Mensagens com botão têm um limite de
-      // caracteres bem mais curto que uma mensagem de texto normal — mandar tudo junto arriscaria
-      // estourar esse limite dependendo do tamanho das regras cadastradas.
+      // As Regras (texto livre, cadastrado por conta — pode ser bem longo) e o resumo da reserva
+      // vão numa mensagem de texto simples, SEPARADA da mensagem com botão — mandar tudo junto
+      // (resumo + pergunta + botões) deixava o resumo meio escondido/espremido dentro da mensagem
+      // de botão. Assim o resumo aparece bem visível, e a mensagem com botão fica só com a
+      // pergunta curta.
       if (regras) {
         await enviarMensagemDirect(conta.access_token, idDoCliente, regras);
       }
 
-      await enviarMensagemComBotoes(
+      await enviarMensagemDirect(
         conta.access_token,
         idDoCliente,
-        `Confirmando: ${dados.quantidade_pessoas} pessoa(s), dia ${dados.data_reserva_br}, ${periodoTexto}. Posso confirmar?`,
-        [
-          { titulo: "Sim, confirmar", payload: RESERVA_CONFIRMAR_SIM },
-          { titulo: "Não, cancelar", payload: RESERVA_CONFIRMAR_NAO },
-        ]
+        `Confirmando: ${dados.quantidade_pessoas} pessoa(s), dia ${dados.data_reserva_br}, ${periodoTexto}.`
       );
+
+      await enviarMensagemComBotoes(conta.access_token, idDoCliente, "Posso confirmar?", [
+        { titulo: "Sim, confirmar", payload: RESERVA_CONFIRMAR_SIM },
+        { titulo: "Não, cancelar", payload: RESERVA_CONFIRMAR_NAO },
+      ]);
       return;
     }
 
@@ -378,11 +380,12 @@ async function continuarFluxo(
       const confirmou = interpretarSimNao(payloadDoBotao, textoDaMensagem);
 
       if (confirmou === null) {
-        await enviarMensagemDirect(
-          conta.access_token,
-          idDoCliente,
-          'Só pra confirmar: posso registrar a reserva? Responde "sim" ou "não".'
-        );
+        // Resposta não reconhecida — reenvia só os botões de novo (sem repetir texto explicando,
+        // já que os botões já deixam claro o que fazer).
+        await enviarMensagemComBotoes(conta.access_token, idDoCliente, "Posso confirmar?", [
+          { titulo: "Sim, confirmar", payload: RESERVA_CONFIRMAR_SIM },
+          { titulo: "Não, cancelar", payload: RESERVA_CONFIRMAR_NAO },
+        ]);
         return;
       }
 
