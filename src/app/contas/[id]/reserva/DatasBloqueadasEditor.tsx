@@ -71,7 +71,7 @@ export default function DatasBloqueadasEditor({
           {datas.map((data) => (
             <span
               key={data}
-              className="flex items-center gap-2 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1 text-sm text-neutral-200"
+              className="flex items-center gap-2 rounded-full border border-neutral-700 bg-neutral-950 px-3 py-1 text-sm text-neutral-200"
             >
               {data}
               <button
@@ -97,7 +97,7 @@ export default function DatasBloqueadasEditor({
             type="date"
             value={novaData}
             onChange={(evento) => setNovaData(evento.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+            className="rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
           />
           <button
             type="button"
