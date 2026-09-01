@@ -54,6 +54,7 @@ Se a mensagem não bater claramente com nenhum setor específico, escolha o seto
 export async function responderComoSetor(
   setor: SetorComConhecimento,
   nomeDaPrefeitura: string,
+  guardrailsDaPrefeitura: string,
   mensagemDoCidadao: string
 ): Promise<string | null> {
   const contato = [
@@ -67,7 +68,7 @@ export async function responderComoSetor(
     .join("\n");
 
   const promptDoSistema = `Você é o atendimento virtual do setor "${setor.nome}" da ${nomeDaPrefeitura}, respondendo cidadãos pelo Instagram Direct. Responda de forma direta, cordial e objetiva, usando só as informações abaixo. Se a pergunta não puder ser respondida com elas, diga isso com honestidade e, se houver contato do setor, indique pra pessoa procurar o atendimento presencial/telefônico.
-
+${guardrailsDaPrefeitura.trim() ? `\nRegras que você DEVE seguir sempre, sem exceção:\n${guardrailsDaPrefeitura}\n` : ""}
 Base de conhecimento do setor:
 ${setor.base_conhecimento_texto || "(nenhuma informação cadastrada ainda)"}
 ${contato ? `\nContato do setor:\n${contato}` : ""}`;

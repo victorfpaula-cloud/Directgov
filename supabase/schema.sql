@@ -14,6 +14,16 @@ create table if not exists directgov_prefeituras (
   nome text not null,
   slug text not null unique,
   ativo boolean not null default true,
+
+  -- regras que valem pra TODOS os setores dessa prefeitura (o que a secretaria virtual nunca
+  -- pode fazer ou falar) — nasce com um texto padrão, editável por prefeitura.
+  guardrails_texto text not null default 'Nunca comente sobre política partidária, religião ou temas polêmicos — mantenha o foco só nos serviços da prefeitura.
+Nunca prometa prazos, valores ou decisões que dependam de análise humana; oriente o cidadão a confirmar direto com o setor responsável.
+Nunca peça nem repita dados sensíveis do cidadão (CPF completo, senha, dados bancários, endereço completo) pelo Direct.
+Sempre deixe claro, se perguntado, que é um atendimento automático.
+Nunca invente informação que não esteja na base de conhecimento do setor — se não souber, diga isso com honestidade.
+Mantenha um tom respeitoso, claro e objetivo, adequado a um atendimento público.',
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

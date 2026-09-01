@@ -43,6 +43,12 @@ export default async function PrefeituraLayout({
             >
               Conta do Instagram
             </a>
+            <a
+              href={`/prefeituras/${prefeitura.id}/guardrails`}
+              className="rounded-lg px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
+            >
+              Guardrails
+            </a>
           </nav>
 
           <div className="mt-6">{children}</div>
