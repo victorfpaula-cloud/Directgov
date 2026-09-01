@@ -1,29 +1,57 @@
-# Chatbot Direct
+# DirectGov
 
-Sistema próprio de atendimento automático de Instagram Direct — substitui o SendPulse para uso
-pessoal do Victor. Projeto irmão do
-[agendador-stories](https://agendador-stories2.vercel.app), totalmente separado (código, deploy,
-cadastro na Meta), mas reaproveitando o **mesmo projeto Supabase** (tabelas com prefixo
-`chatbot_`, sem tocar nas tabelas do agendador).
+Secretaria virtual de prefeituras via Instagram Direct — o cidadão manda mensagem, uma camada de
+IA identifica qual setor da prefeitura é responsável (Saúde, Educação, Obras, etc.) e responde
+usando só a base de conhecimento daquele setor. Projeto irmão do
+[Chatbot Direct](https://chatbot-direct.vercel.app) (automação de Direct pra restaurantes/
+comércios), totalmente separado (código, deploy, App da Meta), mas reaproveitando o **mesmo
+projeto Supabase** (tabelas com prefixo `directgov_`, sem tocar nas tabelas dos outros dois
+produtos que já rodam nele).
 
 Stack: Next.js 14 (App Router, TypeScript) + Tailwind + Supabase (Postgres) + Meta Graph API
 (Instagram messaging) + Gemini (atendimento por IA).
 
-## Estado atual: Etapa 2 — webhook + conexão de conta (quase completa)
+## Como funciona
 
+- Cada **prefeitura** é um ambiente isolado, com sua própria conta do Instagram conectada e seus
+  próprios setores — nada cruza entre prefeituras diferentes.
+- Toda prefeitura nasce com **22 setores padrão** já cadastrados automaticamente (trigger no
+  banco — ver `supabase/schema.sql`), totalmente editáveis: dá pra excluir qualquer um e
+  adicionar outros específicos da cidade. Existe sempre um setor **"Geral"**, fallback pra
+  assunto que não bate com nenhum setor específico.
+- Cada setor tem sua própria base de conhecimento (texto digitado direto no card, upload de
+  PDF/Word entra numa próxima etapa) e seus próprios dados de contato (endereço, telefone,
+  e-mail, horário, responsável — todos opcionais, só o nome é obrigatório).
+- Fluxo de mensagem: cidadão manda Direct → uma camada de triagem decide qual setor é responsável
+  → o setor responde usando só a própria base de conhecimento → a resposta volta pro cidadão como
+  se fosse uma secretária só. A camada de triagem + especialista por setor ainda está sendo
+  construída — por enquanto o webhook só confirma o recebimento da mensagem.
+
+## Estado atual
+
+- **Schema do banco** (`supabase/schema.sql`): pronto e já validado em produção — prefeituras,
+  setores (com contato estruturado e base de conhecimento em texto), arquivos de conhecimento por
+  setor, histórico de mensagens, idempotência do webhook e fluxo de conexão via OAuth.
+- **CRUD de setor** (`/prefeituras`, `/prefeituras/[id]`, `/prefeituras/[id]/setores/...`):
+  criar prefeitura (já nasce com os 22 setores padrão), criar/editar/excluir setor, preencher
+  contato e base de conhecimento em texto.
+- **Conexão de conta do Instagram** (`/prefeituras/[id]/conta`): login via Facebook Login,
+  escolhe qual Página/Instagram conectar pra aquela prefeitura, pausa/reativa/desconecta.
 - **Webhook** (`src/app/api/webhook/instagram/route.ts`): confere o handshake de verificação da
   Meta, valida a assinatura de cada chamada (`X-Hub-Signature-256`), evita processar a mesma
-  mensagem duas vezes (`chatbot_processed_messages`) e responde com um texto fixo de teste.
-  Configurado e verificado no painel do Meta (Callback URL + campo `messages` assinado).
-- **Conexão de conta** (`/contas`, `/contas/conectar`, `src/lib/facebookOAuth.ts`): login via
-  Facebook Login (mesmo padrão do agendador), lista as Páginas com Instagram vinculado, e deixa
-  escolher qual conectar. Ainda falta **adicionar a URL de redirecionamento do OAuth
-  (`/api/auth/facebook/callback`) nas configurações de "Login do Facebook para Empresas" do app
-  do chatbot no painel do Meta** — sem isso o Facebook recusa o redirecionamento na volta do
-  login.
+  mensagem duas vezes, identifica a prefeitura da conta que recebeu a mensagem, registra no
+  histórico (`directgov_mensagens`) e responde com um texto fixo de confirmação — a triagem por
+  IA + resposta especializada por setor ainda não foi construída.
 
-Depois disso: testar de ponta a ponta (conectar uma conta de teste, mandar um Direct, ver a
-resposta fixa chegando) antes de seguir pra Etapa 3.
+## Próximas etapas
+
+1. Upload de PDF/Word na base de conhecimento do setor (extração de texto, sem RAG na v1).
+2. Camada de triagem (roteador): IA decide qual setor é responsável por cada mensagem recebida.
+3. Camada de especialista: IA gera a resposta usando só a base de conhecimento do setor escolhido.
+4. Testar cedo se contas desconhecidas (fora da administradora do app) recebem resposta — risco
+   herdado do Chatbot Direct, mais crítico aqui porque o público é qualquer cidadão desconhecido.
+5. App próprio na Meta (hoje ainda usando o processo/callback do Chatbot Direct como base — falta
+   registrar um App novo, com Callback URL e Verify Token próprios deste projeto).
 
 ## Como rodar (visão geral, não precisa fazer isso localmente)
 
@@ -36,16 +64,7 @@ Na Vercel, as mesmas variáveis de ambiente vão em Project Settings → Environ
 
 ## Banco de dados
 
-O schema das tabelas novas está em `supabase/schema.sql` — rodar uma vez no SQL Editor do mesmo
-projeto Supabase que já hospeda o agendador. Todas as tabelas usam o prefixo `chatbot_` e RLS
-ativado sem policies públicas (mesmo padrão de segurança do agendador — leitura/escrita só via
-rotas server-side com a chave de service role).
-
-## Próximas etapas (ver plano completo no projeto "Agendamento Stories" no Claude)
-
-1. ~~Infraestrutura base (este commit)~~
-2. Webhook mínimo + conexão de 1 conta via OAuth
-3. Atendimento por IA (Gemini) com base de conhecimento, tom de voz e guardrails configuráveis
-4. Palavras-chave especiais (gatilho de reserva, e o que mais for preciso)
-5. Fluxo de reserva completo (capacidade, cutoff de horário, pausa manual, planilha do Google)
-6. Migração das contas do SendPulse, uma de cada vez
+O schema das tabelas está em `supabase/schema.sql` — roda no SQL Editor do mesmo projeto Supabase
+que já hospeda o agendador-stories e o Chatbot Direct. Todas as tabelas usam o prefixo
+`directgov_` e RLS ativado sem policies públicas (leitura/escrita só via rotas server-side com a
+chave de service role).
