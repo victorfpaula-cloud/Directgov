@@ -23,6 +23,7 @@ export type SetorComConhecimento = SetorParaTriagem & {
  */
 export async function decidirSetor<T extends SetorParaTriagem>(
   setores: T[],
+  historicoRecente: string,
   mensagemDoCidadao: string
 ): Promise<T | null> {
   if (setores.length === 0) return null;
@@ -31,12 +32,13 @@ export async function decidirSetor<T extends SetorParaTriagem>(
 
   const listaNumerada = setores.map((setor, indice) => `${indice + 1}. ${setor.nome}`).join("\n");
 
-  const promptDoSistema = `Você é a triagem de uma secretaria virtual de prefeitura. Sua única tarefa é ler a mensagem de um cidadão e decidir qual setor abaixo deve responder. Responda SOMENTE com o número do setor escolhido, sem nenhum texto além disso.
+  const promptDoSistema = `Você é a triagem de uma secretaria virtual de prefeitura. Sua única tarefa é ler a mensagem de um cidadão (levando em conta o histórico recente da conversa, se houver) e decidir qual setor abaixo deve responder. Responda SOMENTE com o número do setor escolhido, sem nenhum texto além disso.
 
 Setores disponíveis:
 ${listaNumerada}
 
-Se a mensagem não bater claramente com nenhum setor específico, escolha o setor "Geral".`;
+Se a mensagem não bater claramente com nenhum setor específico, escolha o setor "Geral".
+${historicoRecente.trim() ? `\nHistórico recente dessa conversa (mais antiga primeiro):\n${historicoRecente}\n` : ""}`;
 
   const resposta = await gerarRespostaComGemini(promptDoSistema, mensagemDoCidadao);
   if (!resposta) return setorGeral;
@@ -55,6 +57,7 @@ export async function responderComoSetor(
   setor: SetorComConhecimento,
   nomeDaPrefeitura: string,
   guardrailsDaPrefeitura: string,
+  historicoRecente: string,
   mensagemDoCidadao: string
 ): Promise<string | null> {
   const contato = [
@@ -67,11 +70,12 @@ export async function responderComoSetor(
     .filter(Boolean)
     .join("\n");
 
-  const promptDoSistema = `Você é o atendimento virtual do setor "${setor.nome}" da ${nomeDaPrefeitura}, respondendo cidadãos pelo Instagram Direct. Responda de forma direta, cordial e objetiva, usando só as informações abaixo. Se a pergunta não puder ser respondida com elas, diga isso com honestidade e, se houver contato do setor, indique pra pessoa procurar o atendimento presencial/telefônico.
+  const promptDoSistema = `Você é o atendimento virtual do setor "${setor.nome}" da ${nomeDaPrefeitura}, respondendo cidadãos pelo Instagram Direct. Responda de forma direta, cordial e objetiva, usando só as informações abaixo. Se a pergunta não puder ser respondida com elas, diga isso com honestidade e, se houver contato do setor, indique pra pessoa procurar o atendimento presencial/telefônico. Se houver histórico recente da conversa, use ele pra entender o contexto (ex: uma pergunta de seguimento tipo "quando vocês podem vir?"), mas responda só a mensagem mais recente do cidadão.
 ${guardrailsDaPrefeitura.trim() ? `\nRegras que você DEVE seguir sempre, sem exceção:\n${guardrailsDaPrefeitura}\n` : ""}
 Base de conhecimento do setor:
 ${setor.base_conhecimento_texto || "(nenhuma informação cadastrada ainda)"}
-${contato ? `\nContato do setor:\n${contato}` : ""}`;
+${contato ? `\nContato do setor:\n${contato}` : ""}
+${historicoRecente.trim() ? `\nHistórico recente dessa conversa (mais antiga primeiro):\n${historicoRecente}\n` : ""}`;
 
   return gerarRespostaComGemini(promptDoSistema, mensagemDoCidadao);
 }
