@@ -6,14 +6,26 @@ export const metadata: Metadata = {
   description: "Secretaria virtual de prefeituras via Instagram Direct",
 };
 
+// Cor de fundo repetida como estilo INLINE (não só como classe do Tailwind) tanto no <html>
+// quanto no <body> — inline aplica na hora, antes até da folha de estilo terminar de carregar.
+// Sem isso, sobrava um instante de tela branca entre abrir o app e a splash aparecer, porque o
+// navegador pinta a página em branco por padrão até o CSS externo chegar.
+const CorDeFundo = "#171717"; // mesmo tom do bg-neutral-900 do Tailwind
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
-      <body className="bg-neutral-900 text-neutral-100 antialiased">
+    <html lang="pt-BR" style={{ backgroundColor: CorDeFundo }}>
+      <head>
+        <meta name="theme-color" content={CorDeFundo} />
+      </head>
+      <body
+        className="bg-neutral-900 text-neutral-100 antialiased"
+        style={{ backgroundColor: CorDeFundo }}
+      >
         {/*
           Tela de abertura com o logo — aparece SÓ na primeira vez que o site é aberto numa aba
           (guardado em sessionStorage, então some sozinha e não volta a aparecer enquanto você
