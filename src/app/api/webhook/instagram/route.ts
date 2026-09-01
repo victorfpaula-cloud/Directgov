@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { assinaturaValida, enviarMensagemDirect } from "@/lib/metaMessaging";
+import { decidirSetor, responderComoSetor } from "@/lib/triagem";
 
 export async function GET(request: NextRequest) {
   const modo = request.nextUrl.searchParams.get("hub.mode");
@@ -106,20 +107,45 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return;
   }
 
-  // TODO: aqui entra a arquitetura de roteador + especialistas descrita no CLAUDE.md do projeto
-  // (triagem decide o setor certo da prefeitura, depois o setor responde usando só a própria
-  // base de conhecimento). Por enquanto, enquanto essa etapa não é construída, o bot só confirma
-  // o recebimento — igual à Etapa 2 do Chatbot Direct, que também começou com uma resposta fixa
-  // de teste antes de ligar a IA de verdade.
-  const respostaDeTeste =
-    "Recebemos sua mensagem! Em breve nossa secretaria virtual vai te direcionar pro setor certo.";
+  const { data: prefeitura } = await admin
+    .from("directgov_prefeituras")
+    .select("nome")
+    .eq("id", conta.prefeitura_id)
+    .maybeSingle();
 
-  await enviarMensagemDirect(conta.access_token, idDoCliente, respostaDeTeste);
+  const { data: setores } = await admin
+    .from("directgov_setores")
+    .select(
+      "id, nome, eh_geral, endereco, telefone, email, horario_atendimento, responsavel, base_conhecimento_texto"
+    )
+    .eq("prefeitura_id", conta.prefeitura_id)
+    .eq("ativo", true)
+    .order("ordem", { ascending: true });
+
+  if (!prefeitura || !setores || setores.length === 0) {
+    console.warn(`Prefeitura ${conta.prefeitura_id} sem setores ativos — mensagem sem resposta.`);
+    return;
+  }
+
+  // Chamada 1 — a "secretária" decide qual setor é responsável, vendo só os nomes dos setores.
+  const setorEscolhido = await decidirSetor(setores, textoDaMensagem);
+
+  // Chamada 2 — o setor escolhido responde usando só a própria base de conhecimento.
+  const respostaGerada = setorEscolhido
+    ? await responderComoSetor(setorEscolhido, prefeitura.nome, textoDaMensagem)
+    : null;
+
+  const respostaFinal =
+    respostaGerada ??
+    "Recebemos sua mensagem, mas tivemos um problema técnico pra responder agora. Vamos te retornar em breve.";
+
+  await enviarMensagemDirect(conta.access_token, idDoCliente, respostaFinal);
 
   await admin.from("directgov_mensagens").insert({
     conta_id: conta.id,
     instagram_scoped_id: idDoCliente,
     direcao: "enviada",
-    texto: respostaDeTeste,
+    texto: respostaFinal,
+    setor_id: setorEscolhido?.id ?? null,
   });
 }
