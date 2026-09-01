@@ -58,3 +58,34 @@ export async function enviarMensagemDirect(
     );
   }
 }
+
+/**
+ * Busca nome e @usuário do Instagram de quem mandou a mensagem — guardado junto com a mensagem
+ * recebida (ver directgov_mensagens) pra aparecer no relatório de atendimentos. Se a chamada
+ * falhar por qualquer motivo, devolve nome genérico em vez de derrubar o processamento da
+ * mensagem por causa disso.
+ */
+export async function buscarPerfilDoCliente(
+  tokenDaConta: string,
+  instagramScopedId: string
+): Promise<{ nome: string; username: string | null }> {
+  try {
+    const resposta = await fetch(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramScopedId}?fields=name,username&access_token=${encodeURIComponent(
+        tokenDaConta
+      )}`,
+      { cache: "no-store" }
+    );
+
+    if (!resposta.ok) return { nome: "Cidadão", username: null };
+
+    const dados = await resposta.json();
+    return {
+      nome: typeof dados?.name === "string" && dados.name ? dados.name : "Cidadão",
+      username: typeof dados?.username === "string" ? dados.username : null,
+    };
+  } catch (erro) {
+    console.error("Falha ao buscar perfil do cidadão no Instagram:", erro);
+    return { nome: "Cidadão", username: null };
+  }
+}

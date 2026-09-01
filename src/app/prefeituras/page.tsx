@@ -40,16 +40,21 @@ export default async function PrefeiturasPage({
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-4">
-          <a
-            href="/relatorios"
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:bg-neutral-950"
-          >
-            Relatório de atendimentos
-          </a>
-          <BotaoSair />
-        </div>
+        <BotaoSair />
       </div>
+
+      <a
+        href="/relatorios"
+        className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-neutral-700 bg-neutral-800 px-5 py-4 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+      >
+        <div>
+          <p className="font-medium text-neutral-100">Relatório de atendimentos</p>
+          <p className="mt-0.5 text-xs text-neutral-400">
+            Filtra por prefeitura e mês, e exporta em PDF
+          </p>
+        </div>
+        <span className="shrink-0 text-neutral-500">&rarr;</span>
+      </a>
 
       {searchParams.criada && (
         <div className="mt-4 rounded-lg border border-green-900 bg-green-950 px-4 py-2 text-sm text-green-300">

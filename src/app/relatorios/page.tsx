@@ -3,11 +3,24 @@ import { BotaoImprimir } from "./BotaoImprimir";
 
 export const dynamic = "force-dynamic";
 
+type MensagemDoSetor = {
+  clienteNome: string;
+  clienteUsername: string | null;
+  dataHora: string;
+  texto: string;
+};
+
+type SetorDoRelatorio = {
+  nome: string;
+  quantidade: number;
+  mensagens: MensagemDoSetor[];
+};
+
 type DadosDoRelatorio = {
   totalRecebidas: number;
   totalRespondidas: number;
   cidadaosUnicos: number;
-  porSetor: { nome: string; quantidade: number }[];
+  porSetor: SetorDoRelatorio[];
 };
 
 function mesAtualISO(): string {
@@ -27,6 +40,23 @@ function nomeDoMes(mes: string): string {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(
     new Date(Date.UTC(ano, mesNumero - 1, 1))
   );
+}
+
+function formatarDataHora(iso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
+// Resumo do assunto: em vez de gastar mais uma chamada de IA só pra gerar uma palavra-chave, usa
+// um recorte do começo da própria mensagem — dá uma ideia do assunto sem custo nem espera extra.
+function resumirAssunto(texto: string): string {
+  const limite = 60;
+  return texto.length > limite ? `${texto.slice(0, limite).trim()}…` : texto;
 }
 
 async function buscarDadosDoRelatorio(
@@ -49,29 +79,42 @@ async function buscarDadosDoRelatorio(
 
   const { data: mensagens } = await admin
     .from("directgov_mensagens")
-    .select("direcao, instagram_scoped_id, setor_id")
+    .select("direcao, instagram_scoped_id, setor_id, cliente_nome, cliente_username, texto, created_at")
     .in("conta_id", contaIds)
     .gte("created_at", inicio)
-    .lt("created_at", fim);
+    .lt("created_at", fim)
+    .order("created_at", { ascending: true });
 
   const recebidas = (mensagens ?? []).filter((m) => m.direcao === "recebida");
   const respondidas = (mensagens ?? []).filter((m) => m.direcao === "enviada");
   const cidadaosUnicos = new Set(recebidas.map((m) => m.instagram_scoped_id)).size;
 
-  const contagemPorSetor = new Map<string, number>();
-  for (const m of respondidas) {
+  // Agrupa as mensagens RECEBIDAS (já com o setor que a triagem decidiu pra cada uma) — é isso
+  // que mostra quem procurou cada setor, e quando.
+  const mensagensPorSetor = new Map<string, MensagemDoSetor[]>();
+  for (const m of recebidas) {
     if (!m.setor_id) continue;
-    contagemPorSetor.set(m.setor_id, (contagemPorSetor.get(m.setor_id) ?? 0) + 1);
+    const lista = mensagensPorSetor.get(m.setor_id) ?? [];
+    lista.push({
+      clienteNome: m.cliente_nome ?? "Cidadão",
+      clienteUsername: m.cliente_username,
+      dataHora: formatarDataHora(m.created_at),
+      texto: resumirAssunto(m.texto),
+    });
+    mensagensPorSetor.set(m.setor_id, lista);
   }
 
-  const setorIds = Array.from(contagemPorSetor.keys());
+  const setorIds = Array.from(mensagensPorSetor.keys());
   const { data: setores } =
     setorIds.length > 0
       ? await admin.from("directgov_setores").select("id, nome").in("id", setorIds)
       : { data: [] as { id: string; nome: string }[] };
 
   const porSetor = (setores ?? [])
-    .map((s) => ({ nome: s.nome, quantidade: contagemPorSetor.get(s.id) ?? 0 }))
+    .map((s) => {
+      const mensagensDoSetor = mensagensPorSetor.get(s.id) ?? [];
+      return { nome: s.nome, quantidade: mensagensDoSetor.length, mensagens: mensagensDoSetor };
+    })
     .sort((a, b) => b.quantidade - a.quantidade);
 
   return {
@@ -182,7 +225,7 @@ export default async function RelatoriosPage({
           </div>
 
           <h3 className="mt-8 text-sm font-semibold text-neutral-300 print:text-black">
-            Mensagens respondidas por setor
+            Atendimentos por setor
           </h3>
 
           {dados.porSetor.length === 0 ? (
@@ -190,25 +233,44 @@ export default async function RelatoriosPage({
               Nenhuma mensagem respondida nesse mês.
             </p>
           ) : (
-            <table className="mt-3 w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-neutral-800 text-left text-neutral-400 print:border-neutral-300 print:text-neutral-600">
-                  <th className="py-2">Setor</th>
-                  <th className="py-2 text-right">Mensagens respondidas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dados.porSetor.map((linha) => (
-                  <tr
-                    key={linha.nome}
-                    className="border-b border-neutral-800 print:border-neutral-200"
-                  >
-                    <td className="py-2 print:text-black">{linha.nome}</td>
-                    <td className="py-2 text-right print:text-black">{linha.quantidade}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="mt-3 flex flex-col gap-4">
+              {dados.porSetor.map((setor) => (
+                <div
+                  key={setor.nome}
+                  className="rounded-xl border border-neutral-800 print:border-neutral-300"
+                >
+                  <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900 px-4 py-2 print:border-neutral-300 print:bg-neutral-100">
+                    <p className="font-semibold text-neutral-100 print:text-black">{setor.nome}</p>
+                    <p className="text-xs text-neutral-400 print:text-neutral-600">
+                      {setor.quantidade} mensagem{setor.quantidade === 1 ? "" : "ns"}
+                    </p>
+                  </div>
+
+                  <ul className="divide-y divide-neutral-800 print:divide-neutral-200">
+                    {setor.mensagens.map((m, indice) => (
+                      <li
+                        key={indice}
+                        className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-4 py-2 text-xs"
+                      >
+                        <span className="text-neutral-300 print:text-black">
+                          {m.clienteNome}
+                          {m.clienteUsername && (
+                            <span className="text-neutral-500 print:text-neutral-600">
+                              {" "}
+                              @{m.clienteUsername}
+                            </span>
+                          )}
+                          <span className="text-neutral-500 print:text-neutral-600"> — {m.texto}</span>
+                        </span>
+                        <span className="shrink-0 text-neutral-500 print:text-neutral-600">
+                          {m.dataHora}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
