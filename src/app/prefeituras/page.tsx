@@ -1,4 +1,5 @@
 import { criarClienteAdmin } from "@/lib/supabase/admin";
+import { BotaoSair } from "./BotaoSair";
 
 export const dynamic = "force-dynamic";
 
@@ -39,12 +40,15 @@ export default async function PrefeiturasPage({
           </p>
         </div>
 
-        <a
-          href="/relatorios"
-          className="shrink-0 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:bg-neutral-950"
-        >
-          Relatório de atendimentos
-        </a>
+        <div className="flex shrink-0 items-center gap-4">
+          <a
+            href="/relatorios"
+            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:bg-neutral-950"
+          >
+            Relatório de atendimentos
+          </a>
+          <BotaoSair />
+        </div>
       </div>
 
       {searchParams.criada && (
