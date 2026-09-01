@@ -109,7 +109,7 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
 
   const { data: prefeitura } = await admin
     .from("directgov_prefeituras")
-    .select("nome")
+    .select("nome, guardrails_texto")
     .eq("id", conta.prefeitura_id)
     .maybeSingle();
 
@@ -132,7 +132,12 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
 
   // Chamada 2 — o setor escolhido responde usando só a própria base de conhecimento.
   const respostaGerada = setorEscolhido
-    ? await responderComoSetor(setorEscolhido, prefeitura.nome, textoDaMensagem)
+    ? await responderComoSetor(
+        setorEscolhido,
+        prefeitura.nome,
+        prefeitura.guardrails_texto ?? "",
+        textoDaMensagem
+      )
     : null;
 
   const respostaFinal =
