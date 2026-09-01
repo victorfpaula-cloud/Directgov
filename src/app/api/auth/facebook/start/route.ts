@@ -1,23 +1,34 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { montarUrlDeAutorizacao } from "@/lib/facebookOAuth";
 
-// Essa rota não lê nada da requisição (sem params, sem cookies), então o Next.js tentaria
-// "pré-gerar" ela como se fosse uma página estática em tempo de build — e nesse momento as
-// variáveis de ambiente do Supabase ainda não estão disponíveis do jeito certo, o que quebrava
-// o build. Isso força ela a rodar só quando alguém acessa de verdade (igual /contas e
-// /contas/conectar).
+// Essa rota não lê nada da requisição em tempo de build (só na hora do acesso de verdade), então
+// o Next.js tentaria "pré-gerar" ela como se fosse uma página estática em tempo de build — e
+// nesse momento as variáveis de ambiente do Supabase ainda não estão disponíveis do jeito certo,
+// o que quebrava o build. Isso força ela a rodar só quando alguém acessa de verdade.
 export const dynamic = "force-dynamic";
 
-// Chamado quando Victor clica em "Adicionar conta" em /contas. Gera um "state" aleatório (contra
-// CSRF — garante que o retorno do Facebook realmente veio de um login que a gente iniciou),
-// guarda ele no banco por um tempo curto, e manda o navegador pro diálogo de login do Facebook.
-export async function GET() {
+// Chamado quando alguém clica em "Conectar Instagram" em /prefeituras/[id]/conta. Gera um "state"
+// aleatório (contra CSRF — garante que o retorno do Facebook realmente veio de um login que a
+// gente iniciou), guarda ele no banco junto com a prefeitura que iniciou a conexão (pra saber,
+// depois que o Facebook volta, a qual prefeitura amarrar a conta), e manda o navegador pro
+// diálogo de login do Facebook.
+export async function GET(request: NextRequest) {
+  const prefeituraId = request.nextUrl.searchParams.get("prefeitura_id");
+
+  if (!prefeituraId) {
+    return new NextResponse("Faltou informar a prefeitura que está conectando a conta.", {
+      status: 400,
+    });
+  }
+
   const state = crypto.randomBytes(24).toString("hex");
 
   const admin = criarClienteAdmin();
-  const { error } = await admin.from("chatbot_oauth_states").insert({ state });
+  const { error } = await admin
+    .from("directgov_oauth_states")
+    .insert({ state, prefeitura_id: prefeituraId });
 
   if (error) {
     return new NextResponse("Não foi possível iniciar a conexão. Tenta de novo em instantes.", {

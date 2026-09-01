@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Chatbot Direct",
-  description: "Atendimento automático de Instagram Direct",
+  title: "DirectGov",
+  description: "Secretaria virtual de prefeituras via Instagram Direct",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
           <div className="relative flex h-20 w-20 items-center justify-center">
             <div className="absolute inset-0 animate-spin rounded-full border-4 border-neutral-800 border-t-neutral-300" />
             <div className="flex h-11 w-11 animate-pop-in items-center justify-center rounded-full bg-neutral-100 text-sm font-bold text-neutral-900">
-              CD
+              DG
             </div>
           </div>
         </div>
@@ -43,12 +43,12 @@ export default function RootLayout({
                 try {
                   var el = document.getElementById("cd-splash");
                   if (!el) return;
-                  var jaAbriu = sessionStorage.getItem("cd_ja_abriu");
+                  var jaAbriu = sessionStorage.getItem("dg_ja_abriu");
                   if (jaAbriu) {
                     el.style.display = "none";
                     return;
                   }
-                  sessionStorage.setItem("cd_ja_abriu", "1");
+                  sessionStorage.setItem("dg_ja_abriu", "1");
                   setTimeout(function () {
                     el.style.opacity = "0";
                     el.style.pointerEvents = "none";

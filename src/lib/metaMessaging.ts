@@ -27,9 +27,9 @@ export function assinaturaValida(corpoBruto: string, assinaturaRecebida: string 
 
 /**
  * Envia uma mensagem de texto pro Direct de um cliente, usando o token de acesso da Página
- * conectada (mesmo padrão de conexão via Facebook Login que o agendador já usa). O endpoint
- * oficial é `/me/messages` (a Meta resolve pra Página certa a partir do próprio token) — não
- * `/{page-id}/messages`, confirmado na documentação da Instagram Messaging API.
+ * conectada. O endpoint oficial é `/me/messages` (a Meta resolve pra Página certa a partir do
+ * próprio token) — não `/{page-id}/messages`, confirmado na documentação da Instagram Messaging
+ * API.
  */
 export async function enviarMensagemDirect(
   tokenDaConta: string,
@@ -56,121 +56,5 @@ export async function enviarMensagemDirect(
     throw new Error(
       `Falha ao enviar mensagem pro Direct (status ${resposta.status}): ${corpoErro}`
     );
-  }
-}
-
-/**
- * Envia uma mensagem com botões de verdade (Button Template) — usado no fluxo de reserva
- * (Etapa 6) pra oferecer opções tocáveis (Hoje/Amanhã/Outro dia, Almoço/Jantar, Sim/Não). Esse é
- * o mesmo tipo de botão que aparece na captura de tela que o Victor mandou (o bot antigo do
- * SendPulse usava isso): o botão fica DENTRO da mensagem, junto com o texto, e continua visível
- * no histórico depois de tocado — diferente do formato anterior (quick replies), que aparecia só
- * como uma barrinha temporária em cima do teclado e sumia depois de usada.
- *
- * Limites da Meta pra esse formato: até 3 botões por mensagem, título de cada botão com até 20
- * caracteres, texto da mensagem com até ~640 caracteres — por isso o texto que chega aqui deve
- * ser sempre curto (a regra é: textos longos, tipo as Regras cadastradas, vão em mensagens de
- * texto simples separadas, nunca dentro de uma mensagem com botão).
- */
-export async function enviarMensagemComBotoes(
-  tokenDaConta: string,
-  igsidDoCliente: string,
-  texto: string,
-  botoes: { titulo: string; payload: string }[]
-): Promise<void> {
-  const resposta = await fetch(
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(
-      tokenDaConta
-    )}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recipient: { id: igsidDoCliente },
-        message: {
-          attachment: {
-            type: "template",
-            payload: {
-              template_type: "button",
-              text: texto,
-              buttons: botoes.map((botao) => ({
-                type: "postback",
-                title: botao.titulo,
-                payload: botao.payload,
-              })),
-            },
-          },
-        },
-      }),
-      cache: "no-store",
-    }
-  );
-
-  if (!resposta.ok) {
-    const corpoErro = await resposta.text().catch(() => "");
-    throw new Error(
-      `Falha ao enviar mensagem com botões pro Direct (status ${resposta.status}): ${corpoErro}`
-    );
-  }
-}
-
-/**
- * Busca nome e @usuário do Instagram de quem mandou a mensagem — usado no fluxo de reserva pra
- * não precisar perguntar o nome (Etapa 6). Se a chamada falhar por qualquer motivo, devolve um
- * nome genérico em vez de derrubar o fluxo inteiro por causa disso.
- */
-export async function buscarPerfilDoCliente(
-  tokenDaConta: string,
-  instagramScopedId: string
-): Promise<{ nome: string; username: string | null }> {
-  try {
-    const resposta = await fetch(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramScopedId}?fields=name,username&access_token=${encodeURIComponent(
-        tokenDaConta
-      )}`,
-      { cache: "no-store" }
-    );
-
-    if (!resposta.ok) return { nome: "Cliente", username: null };
-
-    const dados = await resposta.json();
-    return {
-      nome: typeof dados?.name === "string" && dados.name ? dados.name : "Cliente",
-      username: typeof dados?.username === "string" ? dados.username : null,
-    };
-  } catch (erro) {
-    console.error("Falha ao buscar perfil do cliente no Instagram:", erro);
-    return { nome: "Cliente", username: null };
-  }
-}
-
-/**
- * Busca a URL da foto de perfil da PRÓPRIA conta do Instagram conectada (não de um cliente) —
- * usada pra mostrar a foto de verdade na bolinha do avatar da tela de contas, em vez de só uma
- * letra. De propósito NUNCA é guardada no banco: esse link que a Meta devolve é temporário e
- * expira depois de um tempo, então se guardássemos ele, a foto ia quebrar sozinha mais tarde sem
- * nenhum aviso. Por isso é buscada de novo a cada vez que a tela de contas é aberta (mesma lógica
- * do "status do dia" — a tela já busca tudo de novo a cada abertura). Se falhar por qualquer
- * motivo, devolve null (a tela usa a bolinha colorida com a letra como reserva).
- */
-export async function buscarFotoDePerfilDaConta(
-  tokenDaConta: string,
-  instagramUserId: string
-): Promise<string | null> {
-  try {
-    const resposta = await fetch(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramUserId}?fields=profile_picture_url&access_token=${encodeURIComponent(
-        tokenDaConta
-      )}`,
-      { cache: "no-store" }
-    );
-
-    if (!resposta.ok) return null;
-
-    const dados = await resposta.json();
-    return typeof dados?.profile_picture_url === "string" ? dados.profile_picture_url : null;
-  } catch (erro) {
-    console.error("Falha ao buscar foto de perfil da conta:", erro);
-    return null;
   }
 }

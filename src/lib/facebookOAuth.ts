@@ -26,7 +26,7 @@ const ESCOPOS = [
 
 function urlBaseDoApp(): string {
   // Domínio fixo do projeto na Vercel (não muda entre deploys, diferente da URL com hash).
-  return process.env.NEXT_PUBLIC_APP_URL ?? "https://chatbot-direct.vercel.app";
+  return process.env.NEXT_PUBLIC_APP_URL ?? "https://directgov.vercel.app";
 }
 
 export function urlDeCallback(): string {

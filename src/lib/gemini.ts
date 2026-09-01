@@ -2,7 +2,7 @@
 // O nome do modelo é configurável via variável de ambiente (GEMINI_MODEL) — se o nome padrão
 // abaixo não existir mais na sua conta do Google AI Studio, dá pra trocar sem precisar mexer
 // em código, só ajustando essa variável na Vercel.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
 
 export async function gerarRespostaComGemini(
   promptDoSistema: string,
