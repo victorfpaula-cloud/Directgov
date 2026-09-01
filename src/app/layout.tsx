@@ -24,13 +24,13 @@ export default function RootLayout({
           id="cd-splash"
           className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950 opacity-100 transition-opacity duration-500"
         >
-          <div className="relative flex h-20 w-20 items-center justify-center">
+          <div className="relative flex h-32 w-32 items-center justify-center">
             <div className="absolute inset-0 animate-spin rounded-full border-4 border-neutral-800 border-t-neutral-300" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo-directgov.png"
               alt="DirectGov"
-              className="h-12 w-12 animate-pop-in object-contain"
+              className="h-24 w-24 animate-pop-in object-contain"
             />
           </div>
         </div>
