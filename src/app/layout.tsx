@@ -26,9 +26,12 @@ export default function RootLayout({
         >
           <div className="relative flex h-20 w-20 items-center justify-center">
             <div className="absolute inset-0 animate-spin rounded-full border-4 border-neutral-800 border-t-neutral-300" />
-            <div className="flex h-11 w-11 animate-pop-in items-center justify-center rounded-full bg-neutral-100 text-sm font-bold text-neutral-900">
-              DG
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-directgov.png"
+              alt="DirectGov"
+              className="h-12 w-12 animate-pop-in object-contain"
+            />
           </div>
         </div>
         <script
