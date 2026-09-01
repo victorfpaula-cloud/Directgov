@@ -31,10 +31,21 @@ export default async function PrefeiturasPage({
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
-      <h1 className="text-2xl font-semibold">Prefeituras</h1>
-      <p className="mt-1 text-sm text-neutral-400">
-        Secretaria virtual — cada prefeitura tem seus próprios setores e base de conhecimento.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Prefeituras</h1>
+          <p className="mt-1 text-sm text-neutral-400">
+            Secretaria virtual — cada prefeitura tem seus próprios setores e base de conhecimento.
+          </p>
+        </div>
+
+        <a
+          href="/relatorios"
+          className="shrink-0 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:bg-neutral-950"
+        >
+          Relatório de atendimentos
+        </a>
+      </div>
 
       {searchParams.criada && (
         <div className="mt-4 rounded-lg border border-green-900 bg-green-950 px-4 py-2 text-sm text-green-300">

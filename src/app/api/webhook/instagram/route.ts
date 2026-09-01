@@ -96,6 +96,23 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     return;
   }
 
+  // Últimas mensagens dessa conversa (mesma conta + mesmo cidadão), dentro de uma janela curta —
+  // dá continuidade a perguntas de seguimento ("quando vocês podem vir?") sem arrastar assunto de
+  // uma conversa antiga e já esquecida que aconteceu dias atrás.
+  const DUAS_HORAS_MS = 2 * 60 * 60 * 1000;
+  const { data: mensagensAnteriores } = await admin
+    .from("directgov_mensagens")
+    .select("direcao, texto")
+    .eq("conta_id", conta.id)
+    .eq("instagram_scoped_id", idDoCliente)
+    .gte("created_at", new Date(Date.now() - DUAS_HORAS_MS).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  const historicoRecente = (mensagensAnteriores ?? [])
+    .map((m) => `${m.direcao === "recebida" ? "Cidadão" : "Secretaria"}: ${m.texto}`)
+    .join("\n");
+
   await admin.from("directgov_mensagens").insert({
     conta_id: conta.id,
     instagram_scoped_id: idDoCliente,
@@ -128,7 +145,7 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
   }
 
   // Chamada 1 — a "secretária" decide qual setor é responsável, vendo só os nomes dos setores.
-  const setorEscolhido = await decidirSetor(setores, textoDaMensagem);
+  const setorEscolhido = await decidirSetor(setores, historicoRecente, textoDaMensagem);
 
   // Chamada 2 — o setor escolhido responde usando só a própria base de conhecimento.
   const respostaGerada = setorEscolhido
@@ -136,6 +153,7 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
         setorEscolhido,
         prefeitura.nome,
         prefeitura.guardrails_texto ?? "",
+        historicoRecente,
         textoDaMensagem
       )
     : null;
