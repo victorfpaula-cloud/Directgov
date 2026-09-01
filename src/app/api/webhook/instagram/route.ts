@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
-import { assinaturaValida, enviarMensagemDirect } from "@/lib/metaMessaging";
+import { assinaturaValida, buscarPerfilDoCliente, enviarMensagemDirect } from "@/lib/metaMessaging";
 import { decidirSetor, responderComoSetor } from "@/lib/triagem";
 
 export async function GET(request: NextRequest) {
@@ -113,12 +113,20 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
     .map((m) => `${m.direcao === "recebida" ? "Cidadão" : "Secretaria"}: ${m.texto}`)
     .join("\n");
 
-  await admin.from("directgov_mensagens").insert({
-    conta_id: conta.id,
-    instagram_scoped_id: idDoCliente,
-    direcao: "recebida",
-    texto: textoDaMensagem ?? "[mensagem sem texto — áudio, imagem, story etc.]",
-  });
+  const perfilDoCliente = await buscarPerfilDoCliente(conta.access_token, idDoCliente);
+
+  const { data: mensagemRecebida } = await admin
+    .from("directgov_mensagens")
+    .insert({
+      conta_id: conta.id,
+      instagram_scoped_id: idDoCliente,
+      direcao: "recebida",
+      texto: textoDaMensagem ?? "[mensagem sem texto — áudio, imagem, story etc.]",
+      cliente_nome: perfilDoCliente.nome,
+      cliente_username: perfilDoCliente.username,
+    })
+    .select("id")
+    .single();
 
   if (!textoDaMensagem) {
     return;
@@ -146,6 +154,15 @@ async function processarEventoDeMensagem(admin: ReturnType<typeof criarClienteAd
 
   // Chamada 1 — a "secretária" decide qual setor é responsável, vendo só os nomes dos setores.
   const setorEscolhido = await decidirSetor(setores, historicoRecente, textoDaMensagem);
+
+  // Atualiza a mensagem recebida com o setor decidido — assim o relatório de atendimentos
+  // consegue mostrar quem procurou cada setor, sem precisar cruzar com a mensagem de resposta.
+  if (setorEscolhido && mensagemRecebida) {
+    await admin
+      .from("directgov_mensagens")
+      .update({ setor_id: setorEscolhido.id })
+      .eq("id", mensagemRecebida.id);
+  }
 
   // Chamada 2 — o setor escolhido responde usando só a própria base de conhecimento.
   const respostaGerada = setorEscolhido

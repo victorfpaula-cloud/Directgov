@@ -180,6 +180,10 @@ create table if not exists directgov_mensagens (
   direcao text not null check (direcao in ('recebida', 'enviada')),
   texto text not null,
   setor_id uuid references directgov_setores(id) on delete set null,
+  -- nome e @usuário do Instagram de quem mandou (só preenchido em mensagens "recebida") —
+  -- usado no relatório de atendimentos, pra saber quem procurou cada setor.
+  cliente_nome text,
+  cliente_username text,
   created_at timestamptz not null default now()
 );
 
