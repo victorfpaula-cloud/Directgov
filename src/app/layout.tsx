@@ -21,6 +21,17 @@ export default function RootLayout({
     <html lang="pt-BR" style={{ backgroundColor: CorDeFundo }}>
       <head>
         <meta name="theme-color" content={CorDeFundo} />
+        {/*
+          Sem isso, quando o app é adicionado à tela inicial do iPhone ("web app"), o iOS mostra
+          uma tela de abertura EM BRANCO por padrão, antes mesmo da nossa página começar a
+          carregar — é uma etapa própria do sistema, diferente da splash que a gente desenha (essa
+          aqui embaixo, com a logo girando). O manifesto avisa o iOS pra usar essa mesma cor de
+          fundo escura nessa tela nativa, em vez de branco.
+        */}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="DirectGov" />
       </head>
       <body
         className="bg-neutral-900 text-neutral-100 antialiased"
